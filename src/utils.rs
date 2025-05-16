@@ -367,12 +367,12 @@ pub fn start_live(area_id: &str) -> Result<u64, Box<dyn std::error::Error>> {
 
     let rtmp_addr = res["data"]["rtmp"]["addr"].as_str().ok_or("缺少rtmp地址")?;
     let rtmp_code = res["data"]["rtmp"]["code"].as_str().ok_or("缺少rtmp code")?;
-    let live_id = res["data"]["live_id"].as_i64().ok_or("缺少live_id")?;
+    let live_key = res["data"]["live_key"].as_str().ok_or("缺少live_key")?;
     
     println!("RTMP地址: {}", rtmp_addr);
     println!("直播码: {}", rtmp_code);
 
-    Ok(live_id as u64)
+    Ok(live_key.parse::<u64>()?)
 }
 
 pub fn stop_live(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {

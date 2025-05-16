@@ -26,10 +26,13 @@ fn main() {
     println!("开始直播！");
     let live_id = utils::start_live(&area_id.to_string()).expect("直播失败");
 
+    println!("请在本程序中按 Option(Ctrl) + C 关闭直播！否则直播将不会关闭！");
+
     // 监听程序退出信号
     let _ = ctrlc::set_handler(move || {
-        println!("退出直播！");
+        println!("监听到 Option(Ctrl) + C 准备关闭直播！");
         utils::stop_live(live_id).expect("停止直播失败");
+        println!("直播已关闭！");
         std::process::exit(0);
     });
 
