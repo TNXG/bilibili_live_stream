@@ -1,4 +1,4 @@
-name: Release
+name: Cross-platform Release Build
 
 on:
   push:
@@ -6,16 +6,54 @@ on:
       - "v*"
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build:
-    name: Build with cross for multiple platforms
-    runs-on: ubuntu-latest
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            targets:
+              [
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "x86_64-pc-windows-gnu",
+              ]
+            artifact_paths:
+              [
+                "target/x86_64-*/release/*",
+                "target/aarch64-*/release/*",
+                "target/x86_64-pc-*/release/*",
+              ]
+          - os: macos-latest
+            targets: ["x86_64-apple-darwin", "aarch64-apple-darwin"]
+            artifact_paths:
+              ["target/x86_64-*/release/*", "target/aarch64-*/release/*"]
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache Cargo
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rust-src
+          default: true
+
+      - name: Add Rust targets
+        run: |
+          rustup target add ${{ join(matrix.targets, ' ') }}
+          rustup component add rust-src
+
+      - name: Cache Cargo dependencies
         uses: actions/cache@v4
         with:
           path: |
@@ -24,36 +62,68 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
-        
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build targets
+      - name: Linux setup
+        if: runner.os == 'Linux'
         run: |
-          targets=(
-            x86_64-unknown-linux-gnu
-            aarch64-unknown-linux-gnu
-            x86_64-pc-windows-gnu
-            aarch64-pc-windows-msvc
-            x86_64-apple-darwin
-            aarch64-apple-darwin
-          )
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+          cargo install cross --git https://github.com/cross-rs/cross
 
-          for target in "${targets[@]}"; do
-            echo "🔨 Building for $target"
-            cross build --release --target $target
+      - name: macOS setup
+        if: runner.os == 'macOS'
+        run: |
+          xcode-select --install || true
+          sudo xcodebuild -license accept
+
+      - name: Run builds
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            for target in ${{ join(matrix.targets, ' ') }}; do
+              cross build --target $target --release
+            done
+          else
+            for target in ${{ join(matrix.targets, ' ') }}; do
+              cargo build --target $target --release
+            done
+          fi
+
+      - name: Prepare release binaries
+        id: prepare-artifacts
+        run: |
+          mkdir -p artifacts
+          echo "Searching for binaries in:"
+          for target in ${{ join(matrix.targets, ' ') }}; do
+            path="target/${target}/release/"
+            echo "- ${path}"
+            
+            if [ ! -d "${path}" ]; then
+              echo "  Directory not found"
+              continue
+            fi
+            
+            # Copy and rename executable files
+            find "${path}" -maxdepth 1 -type f \( \
+              -perm -u=x -o \
+              -name "*.exe" -o \
+              -name "*.dll" -o \
+              -name "*.so" -o \
+              -name "*.dylib" \
+            \) -exec sh -c 'cp "$1" "artifacts/${2}_$(basename "$1")"' _ {} "$target" \;
           done
+
+          # Verify results
+          if [ -z "$(ls -A artifacts)" ]; then
+            echo "##[error]No release binaries found!"
+            exit 1
+          fi
+
+          echo "Found binaries:"
+          ls -lh artifacts/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-binaries
-          path: |
-            target/x86_64-unknown-linux-gnu/release/*
-            target/aarch64-unknown-linux-gnu/release/*
-            target/x86_64-pc-windows-gnu/release/*
-            target/aarch64-pc-windows-msvc/release/*
-            target/x86_64-apple-darwin/release/*
-            target/aarch64-apple-darwin/release/*
+          name: ${{ runner.os }}-binaries
+          path: artifacts/*
+          if-no-files-found: error

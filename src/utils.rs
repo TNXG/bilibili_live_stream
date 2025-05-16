@@ -155,6 +155,11 @@ pub fn check_status() -> bool {
         println!("cookies.json文件不存在");
         return false;
     }
+    // 检查一下文件内容是否为空
+    if std::fs::read_to_string("cookies.json").unwrap().is_empty() {
+        println!("cookies.json文件为空");
+        return false;
+    }
     // 读取cookies.json文件
     let sessdata = read_cookies().expect("读取cookies.json错误").sessdata;
     // 发送请求
