@@ -1,5 +1,8 @@
 name: Cross-platform Release Build
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -127,3 +130,19 @@ jobs:
           name: ${{ runner.os }}-binaries
           path: artifacts/*
           if-no-files-found: error
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            Automated release for ${{ github.ref_name }}
+            Built on GitHub Actions
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/*
