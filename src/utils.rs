@@ -384,6 +384,7 @@ pub fn stop_live(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
         .form(&[
             ("room_id", cookies.room_id.to_string()),
             ("csrf", cookies.csrf_token.clone()),
+            ("platform", "web_electron_link".to_string()),
         ])
         .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
         .send()?
