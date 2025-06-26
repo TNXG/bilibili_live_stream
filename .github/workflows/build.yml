@@ -85,7 +85,7 @@ jobs:
           key: ${{ matrix.target }}
           cache-on-failure: true
 
-      - name: Install cross
+      - name: Install cross (Linux only)
         if: matrix.cross == true
         uses: taiki-e/install-action@v2
         with:
@@ -93,6 +93,7 @@ jobs:
 
       - name: Setup Windows dependencies
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           # Enable long paths for Windows
           git config --system core.longpaths true
@@ -110,32 +111,53 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev
 
-      - name: Build binary
-        run: |
-          if [[ "${{ matrix.cross }}" == "true" ]]; then
-            cross build --target ${{ matrix.target }} --release --locked
-          else
-            cargo build --target ${{ matrix.target }} --release --locked
-          fi
+      - name: Build binary (with cross)
+        if: matrix.cross == true
+        run: cross build --target ${{ matrix.target }} --release --locked
 
-      - name: Prepare binary
+      - name: Build binary (native)
+        if: matrix.cross == false
+        run: cargo build --target ${{ matrix.target }} --release --locked
+
+      - name: Prepare binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          
+          # Get binary name from Cargo.toml
+          $binaryName = (Select-String -Path "Cargo.toml" -Pattern '^name = "(.+)"').Matches[0].Groups[1].Value
+          
+          # Source and destination paths
+          $sourcePath = "target\${{ matrix.target }}\release\${binaryName}.exe"
+          $destPath = "artifacts\${binaryName}-${{ matrix.target }}.exe"
+          
+          # Copy and verify
+          if (Test-Path $sourcePath) {
+            Copy-Item $sourcePath $destPath
+            Write-Host "✅ Binary found and copied: $destPath"
+            Get-Item $destPath | Format-List
+          } else {
+            Write-Host "❌ Binary not found at: $sourcePath"
+            if (Test-Path "target\${{ matrix.target }}\release\") {
+              Write-Host "Contents of target\${{ matrix.target }}\release\:"
+              Get-ChildItem "target\${{ matrix.target }}\release\" | Format-Table
+            }
+            exit 1
+          }
+
+      - name: Prepare binary (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p artifacts
-          
-          # Determine binary extension
-          if [[ "${{ matrix.target }}" == *"-windows-"* ]]; then
-            BINARY_EXT=".exe"
-          else
-            BINARY_EXT=""
-          fi
           
           # Find the binary name from Cargo.toml
           BINARY_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
           
           # Source and destination paths
-          SOURCE_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}${BINARY_EXT}"
-          DEST_PATH="artifacts/${BINARY_NAME}-${{ matrix.target }}${BINARY_EXT}"
+          SOURCE_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}"
+          DEST_PATH="artifacts/${BINARY_NAME}-${{ matrix.target }}"
           
           # Copy and verify
           if [[ -f "${SOURCE_PATH}" ]]; then
@@ -145,7 +167,7 @@ jobs:
             # Show file info
             ls -la "${DEST_PATH}"
             
-            # Show file type (Linux/macOS only)
+            # Show file type
             if command -v file >/dev/null 2>&1; then
               file "${DEST_PATH}"
             fi
@@ -265,21 +287,34 @@ jobs:
           name: binary-${{ matrix.target }}
           path: ./
 
-      - name: Test binary
+      - name: Test binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Get-ChildItem -File | Select-Object -First 1
+          Write-Host "Testing binary: $($binary.Name)"
+          
+          # Example: Run with --version flag
+          try {
+            & ".\$($binary.Name)" --version
+          } catch {
+            try {
+              & ".\$($binary.Name)" --help
+            } catch {
+              Write-Host "Binary executed (no flags supported)"
+            }
+          }
+
+      - name: Test binary (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          # Make executable on Unix systems
-          if [[ "${{ runner.os }}" != "Windows" ]]; then
-            chmod +x ./*
-          fi
+          # Make executable
+          chmod +x ./*
           
-          # Run basic test (adjust according to your binary)
+          # Run basic test
           BINARY=$(ls ./* | head -1)
           echo "Testing binary: $BINARY"
           
           # Example: Run with --version flag
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            ./$BINARY --version || ./$BINARY --help || echo "Binary executed"
-          else
-            ./$BINARY --version || ./$BINARY --help || echo "Binary executed"
-          fi
+          ./$BINARY --version || ./$BINARY --help || echo "Binary executed"
