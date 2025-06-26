@@ -66,26 +66,26 @@ pub const QR_STATUS: QRStatus = QRStatus {
 };
 
 fn generate_qr_code() -> Result<QRKeyResponseData, Box<dyn std::error::Error>> {
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .send()?
-        .json::<QRKeyResponse>()?;
-    Ok(response.data)
+    let response = minreq::get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .send()?;
+  
+    let response_text = response.as_str()?;
+    let qr_response: QRKeyResponse = serde_json::from_str(response_text)?;
+    Ok(qr_response.data)
 }
 
 fn poll_qr_status(
     qrcode_key: &str,
 ) -> Result<QrPollResponseData, Box<dyn std::error::Error>> {
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .get("https://passport.bilibili.com/x/passport-login/web/qrcode/poll")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .query(&[("qrcode_key", qrcode_key)])
-        .send()?
-        .json::<QRPollResponse>()?;
-    Ok(response.data)
+    let url = format!("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key={}", qrcode_key);
+    let response = minreq::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .send()?;
+  
+    let response_text = response.as_str()?;
+    let poll_response: QRPollResponse = serde_json::from_str(response_text)?;
+    Ok(poll_response.data)
 }
 
 pub fn get_query_string(name: &str, url: &str) -> String {
@@ -103,30 +103,27 @@ pub fn get_query_string(name: &str, url: &str) -> String {
 }
 
 pub fn get_roomid(sessdata: &str) -> i32 {
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .get("https://api.bilibili.com/x/web-interface/nav")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .header("Cookie", format!("SESSDATA={}", sessdata))
+    let response = minreq::get("https://api.bilibili.com/x/web-interface/nav")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", &format!("SESSDATA={}", sessdata))
         .send()
         .expect("发送请求错误");
-    
-    // 自动解析 JSON 到 NavResponse
-    let nav_response: NavResponse = response.json().expect("解析 JSON 错误");
-    let user_code = nav_response.data.mid.to_string();  // 转换为字符串（如果需要）
+  
+    let response_text = response.as_str().expect("获取响应文本错误");
+    let nav_response: NavResponse = serde_json::from_str(response_text).expect("解析 JSON 错误");
+    let user_code = nav_response.data.mid.to_string();
 
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .get("https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .query(&[("mid", user_code)])
+    let url = format!("https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld?mid={}", user_code);
+    let response = minreq::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()
         .expect("发送请求错误");
-    
-    // 自动解析 JSON 到 RoomInfoResponse
-    let room_info: RoomInfoResponse = response.json().expect("解析 JSON 错误");
+  
+    let response_text = response.as_str().expect("获取响应文本错误");
+    let room_info: RoomInfoResponse = serde_json::from_str(response_text).expect("解析 JSON 错误");
     room_info.data.roomid as i32
 }
+
 pub fn save_cookies(set_cookies_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let bili_sessdata = get_query_string("SESSDATA", set_cookies_url);
     let csrf = get_query_string("bili_jct", set_cookies_url);
@@ -163,15 +160,15 @@ pub fn check_status() -> bool {
     // 读取cookies.json文件
     let sessdata = read_cookies().expect("读取cookies.json错误").sessdata;
     // 发送请求
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .get("https://api.bilibili.com/x/web-interface/nav")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .header("Cookie", format!("SESSDATA={}", sessdata))
+    let response = minreq::get("https://api.bilibili.com/x/web-interface/nav")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Cookie", &format!("SESSDATA={}", sessdata))
         .send()
         .expect("发送请求错误");
+  
     // 解析响应
-    let response_json: serde_json::Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let response_text = response.as_str().unwrap();
+    let response_json: serde_json::Value = serde_json::from_str(response_text).unwrap();
     let code = response_json["code"].as_i64().unwrap();
     if code == 0 {
         return true;
@@ -182,14 +179,13 @@ pub fn check_status() -> bool {
 }
 
 pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .get("https://api.live.bilibili.com/room/v1/Area/getList")
-        .header("User-Agent", DEFAULT_USER_AGENT)
+    let response = minreq::get("https://api.live.bilibili.com/room/v1/Area/getList")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
-    
-    let area_list: serde_json::Value = response.json()?;
-    
+  
+    let response_text = response.as_str()?;
+    let area_list: serde_json::Value = serde_json::from_str(response_text)?;
+  
     loop {
         // 显示一级分区
         println!("\n一级分区列表:");
@@ -198,21 +194,21 @@ pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
                 println!("{}. {}", i+1, area["name"]);
             }
         }
-        
+      
         println!("\n请输入一级分区编号:");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         let first_choice: usize = input.trim().parse()?;
-        
+      
         if first_choice == 0 {
-            println!("你是抱着多大的觉悟在一级菜单按下“0”的？");
+            println!("你是抱着多大的觉悟在一级菜单按下0的？");
             continue;
         }
-        
+      
         if let Some(data) = area_list["data"].as_array() {
             if first_choice > 0 && first_choice <= data.len() {
                 let selected_first_area = &data[first_choice-1];
-                
+              
                 // 显示二级分区
                 if let Some(second_list) = selected_first_area["list"].as_array() {
                     loop {
@@ -220,16 +216,16 @@ pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
                         for (i, area) in second_list.iter().enumerate() {
                             println!("{}. {} - {}", i+1, area["name"], area["id"]);
                         }
-                        
+                      
                         println!("\n请输入二级分区编号(输入0返回):");
                         let mut second_input = String::new();
                         std::io::stdin().read_line(&mut second_input)?;
                         let second_choice: usize = second_input.trim().parse()?;
-                        
+                      
                         if second_choice == 0 {
                             break;
                         }
-                        
+                      
                         if second_choice > 0 && second_choice <= second_list.len() {
                             let selected_area = &second_list[second_choice-1];
                             println!("\n已选择分区: {} (ID: {})", selected_area["name"], selected_area["id"]);
@@ -237,13 +233,13 @@ pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
                             let numeric_id: String = id_str.chars().filter(|c| c.is_numeric()).collect();
                             return Ok(numeric_id.parse::<u32>()?);
                         }
-                        
+                      
                         println!("无效的选择，请重新输入");
                     }
                 }
             }
         }
-        
+      
         println!("无效的选择，请重新输入");
     }
 }
@@ -300,31 +296,31 @@ fn generate_and_save_qrcode(url: &str, filename: &str) -> Result<(), Box<dyn std
 
     // 生成二维码
     let code = QrCode::new(url.as_bytes())?;
-    
+  
     // 转换为图像
     let image = code.render::<Luma<u8>>()
         .quiet_zone(false)  // 禁用静区（可选）
         .min_dimensions(200, 200)  // 最小尺寸
         .build();
-    
+  
     // 保存为PNG文件
     let path = Path::new(filename);
     image.save(path)?;
-    
+  
     Ok(())
 }
 
 fn print_qrcode_in_terminal(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     use qrcode::QrCode;
     let code = QrCode::new(url.as_bytes())?;
-    
+  
     // 转换为ASCII字符串
     let string = code.render()
         .light_color(' ')  // 浅色部分用空格
         .dark_color('█')  // 深色部分用方块
         .quiet_zone(false)
         .build();
-    
+  
     println!("{}", string);
     Ok(())
 }
@@ -332,12 +328,13 @@ fn print_qrcode_in_terminal(url: &str) -> Result<(), Box<dyn std::error::Error>>
 // 获取用户最近直播过的分区信息
 pub fn get_recent_live() -> Result<(String, String), Box<dyn std::error::Error>> {
     let room_id = read_cookies().expect("读取cookies.json错误").room_id;
-    let client = reqwest::blocking::Client::new();
-    let res = client.get("https://api.live.bilibili.com/room/v1/Area/getMyChooseArea")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .query(&[("roomid", room_id.to_string())])
+    let url = format!("https://api.live.bilibili.com/room/v1/Area/getMyChooseArea?roomid={}", room_id);
+    let response = minreq::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
-    let json: serde_json::Value = res.json()?;
+  
+    let response_text = response.as_str()?;
+    let json: serde_json::Value = serde_json::from_str(response_text)?;
     let data = &json["data"][0];
     let id = data["id"].as_str().unwrap().to_string();
     let name = data["name"].as_str().unwrap().to_string();
@@ -347,28 +344,33 @@ pub fn get_recent_live() -> Result<(String, String), Box<dyn std::error::Error>>
 // 开始直播，获取推流码和推流地址
 pub fn start_live(area_id: &str) -> Result<u64, Box<dyn std::error::Error>> {
     let cookies = read_cookies().expect("读取cookies.json错误");
-    let client = reqwest::blocking::Client::new();
-    let res = client.post("https://api.live.bilibili.com/room/v1/Room/startLive")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(&[
-            ("room_id", cookies.room_id.to_string()),
-            ("area_v2", area_id.to_string()),
-            ("csrf", cookies.csrf_token.clone()),
-            ("platform", "pc_link".to_string()),
-        ])
-        .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
-        .send()?
-        .json::<serde_json::Value>()?;
+  
+    // 构建表单数据
+    let form_data = format!(
+        "room_id={}&area_v2={}&csrf={}&platform=pc_link",
+        cookies.room_id,
+        area_id,
+        cookies.csrf_token
+    );
+  
+    let response = minreq::post("https://api.live.bilibili.com/room/v1/Room/startLive")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_header("Cookie", &format!("SESSDATA={}", cookies.sessdata))
+        .with_body(form_data)
+        .send()?;
+
+    let response_text = response.as_str()?;
+    let res: serde_json::Value = serde_json::from_str(response_text)?;
 
     if res["code"].as_i64() != Some(0) {
-        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")))?;
+        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into());
     }
 
     let rtmp_addr = res["data"]["rtmp"]["addr"].as_str().ok_or("缺少rtmp地址")?;
     let rtmp_code = res["data"]["rtmp"]["code"].as_str().ok_or("缺少rtmp code")?;
     let live_key = res["data"]["live_key"].as_str().ok_or("缺少live_key")?;
-    
+  
     println!("RTMP地址: {}", rtmp_addr);
     println!("直播码: {}", rtmp_code);
 
@@ -377,23 +379,28 @@ pub fn start_live(area_id: &str) -> Result<u64, Box<dyn std::error::Error>> {
 
 pub fn stop_live(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
     let cookies = read_cookies().expect("读取cookies.json错误");
-    let client = reqwest::blocking::Client::new();
-    let res = client.post("https://api.live.bilibili.com/room/v1/Room/stopLive")
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(&[
-            ("room_id", cookies.room_id.to_string()),
-            ("csrf", cookies.csrf_token.clone()),
-            ("platform", "web_electron_link".to_string()),
-        ])
-        .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
-        .send()?
-        .json::<serde_json::Value>()?;
+  
+    // 构建表单数据
+    let form_data = format!(
+        "room_id={}&csrf={}&platform=web_electron_link",
+        cookies.room_id,
+        cookies.csrf_token
+    );
+  
+    let response = minreq::post("https://api.live.bilibili.com/room/v1/Room/stopLive")
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/x-www-form-urlencoded")
+        .with_header("Cookie", &format!("SESSDATA={}", cookies.sessdata))
+        .with_body(form_data)
+        .send()?;
+
+    let response_text = response.as_str()?;
+    let res: serde_json::Value = serde_json::from_str(response_text)?;
 
     if res["code"].as_i64() != Some(0) {
-        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")))?;
+        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into());
     }
-    
+  
     println!("成功关闭直播");
 
     get_live_info(live_id)?;
@@ -403,19 +410,21 @@ pub fn stop_live(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
 
 fn get_live_info(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
     let cookies = read_cookies().expect("读取cookies.json错误");
-    let client = reqwest::blocking::Client::new();
-    let res = client.get("https://api.live.bilibili.com/xlive/app-blink/v1/live/StopLiveData")
-       .header("User-Agent", DEFAULT_USER_AGENT)
-       .header("Content-Type", "application/json, text/plain, */*")
-       .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
-       .query(&[("live_key", live_id.to_string())])
-       .send()?
-      .json::<serde_json::Value>()?;
-    
+    let url = format!("https://api.live.bilibili.com/xlive/app-blink/v1/live/StopLiveData?live_key={}", live_id);
+  
+    let response = minreq::get(&url)
+        .with_header("User-Agent", DEFAULT_USER_AGENT)
+        .with_header("Content-Type", "application/json, text/plain, */*")
+        .with_header("Cookie", &format!("SESSDATA={}", cookies.sessdata))
+        .send()?;
+
+    let response_text = response.as_str()?;
+    let res: serde_json::Value = serde_json::from_str(response_text)?;
+  
     if res["code"].as_i64() != Some(0) {
-        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")))?;
+        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into());
     }
-    
+  
     let data = &res["data"];
     println!("直播统计信息:");
     println!("新增粉丝 : {}", data["AddFans"].as_i64().unwrap_or(0));
@@ -425,6 +434,6 @@ fn get_live_info(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
     println!("最大在线 : {}", data["MaxOnline"].as_i64().unwrap_or(0));
     println!("新增粉丝勋章 : {}", data["NewFansClub"].as_i64().unwrap_or(0));
     println!("累计观看 : {}", data["WatchedCount"].as_i64().unwrap_or(0));
-    
+
     Ok(())
 }
