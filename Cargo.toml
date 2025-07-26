@@ -19,10 +19,12 @@ qrcode = "0.14.1"
 #     "json",
 # ] }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.140", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0.140", default-features = false, features = [
+    "alloc",
+] }
 openssl = { version = "0.10.72", features = ["vendored"] }
-minreq = { version = "2.13.4", features = ["https"] }
-thiserror = "1.0"
-log = "0.4"
-env_logger = "0.11"
+minreq = { version = "2.13.4", default-features = false, features = ["https"] }
+thiserror = { version = "2.0.12", default-features = false }
+log = { version = "0.4.27", default-features = false }
+env_logger = { version = "0.11.7", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
