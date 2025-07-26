@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use crate::error::{BiliLiveError, Result};
+use crate::{user_info, user_success, user_warning, user_input_prompt};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Cookies {
@@ -65,7 +67,7 @@ pub const QR_STATUS: QRStatus = QRStatus {
     success: 0,     // 登录成功
 };
 
-fn generate_qr_code() -> Result<QRKeyResponseData, Box<dyn std::error::Error>> {
+fn generate_qr_code() -> Result<QRKeyResponseData> {
     let response = minreq::get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
@@ -77,7 +79,7 @@ fn generate_qr_code() -> Result<QRKeyResponseData, Box<dyn std::error::Error>> {
 
 fn poll_qr_status(
     qrcode_key: &str,
-) -> Result<QrPollResponseData, Box<dyn std::error::Error>> {
+) -> Result<QrPollResponseData> {
     let url = format!("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key={}", qrcode_key);
     let response = minreq::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
@@ -102,83 +104,85 @@ pub fn get_query_string(name: &str, url: &str) -> String {
     String::new()
 }
 
-pub fn get_roomid(sessdata: &str) -> i32 {
+pub fn get_roomid(sessdata: &str) -> Result<i32> {
     let response = minreq::get("https://api.bilibili.com/x/web-interface/nav")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", &format!("SESSDATA={}", sessdata))
-        .send()
-        .expect("发送请求错误");
+        .send()?;
   
-    let response_text = response.as_str().expect("获取响应文本错误");
-    let nav_response: NavResponse = serde_json::from_str(response_text).expect("解析 JSON 错误");
+    let response_text = response.as_str()?;
+    let nav_response: NavResponse = serde_json::from_str(response_text)?;
     let user_code = nav_response.data.mid.to_string();
 
     let url = format!("https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld?mid={}", user_code);
     let response = minreq::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .send()
-        .expect("发送请求错误");
+        .send()?;
   
-    let response_text = response.as_str().expect("获取响应文本错误");
-    let room_info: RoomInfoResponse = serde_json::from_str(response_text).expect("解析 JSON 错误");
-    room_info.data.roomid as i32
+    let response_text = response.as_str()?;
+    let room_info: RoomInfoResponse = serde_json::from_str(response_text)?;
+    Ok(room_info.data.roomid as i32)
 }
 
-pub fn save_cookies(set_cookies_url: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_cookies(set_cookies_url: &str) -> Result<()> {
     let bili_sessdata = get_query_string("SESSDATA", set_cookies_url);
     let csrf = get_query_string("bili_jct", set_cookies_url);
     let cookies = Cookies {
-        room_id: get_roomid(&bili_sessdata),
+        room_id: get_roomid(&bili_sessdata)?,
         sessdata: bili_sessdata,
         csrf_token: csrf,
     };
 
     let cookies_json = serde_json::to_string_pretty(&cookies)?;
     fs::write("cookies.json", cookies_json)?;
-    println!("Cookies保存成功");
+    user_success!("Cookies保存成功");
     Ok(())
 }
 
-pub fn read_cookies() -> Result<Cookies, Box<dyn std::error::Error>> {
-    let cookies_str = std::fs::read_to_string("./cookies.json").expect("读取cookies.json失败");
-    let cookies: Cookies = serde_json::from_str(&cookies_str).expect("解析cookies.json失败");
+pub fn read_cookies() -> Result<Cookies> {
+    let cookies_str = std::fs::read_to_string("./cookies.json")
+        .map_err(|e| BiliLiveError::IoError(e))?;
+    let cookies: Cookies = serde_json::from_str(&cookies_str)
+        .map_err(|e| BiliLiveError::JsonError(e))?;
     Ok(cookies)
 }
 
-pub fn check_status() -> bool {
-    println!("检查登录状态...");
+pub fn check_status() -> Result<bool> {
+    user_info!("检查登录状态...");
     // 先检查一下文件是否存在
     if !std::path::Path::new("cookies.json").exists() {
-        println!("cookies.json文件不存在");
-        return false;
+        user_warning!("cookies.json文件不存在");
+        return Ok(false);
     }
     // 检查一下文件内容是否为空
-    if std::fs::read_to_string("cookies.json").unwrap().is_empty() {
-        println!("cookies.json文件为空");
-        return false;
+    if std::fs::read_to_string("cookies.json")
+        .map_err(|e| BiliLiveError::IoError(e))?
+        .is_empty() {
+        user_warning!("cookies.json文件为空");
+        return Ok(false);
     }
     // 读取cookies.json文件
-    let sessdata = read_cookies().expect("读取cookies.json错误").sessdata;
+    let sessdata = read_cookies()?.sessdata;
     // 发送请求
     let response = minreq::get("https://api.bilibili.com/x/web-interface/nav")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Cookie", &format!("SESSDATA={}", sessdata))
-        .send()
-        .expect("发送请求错误");
+        .send()?;
   
     // 解析响应
-    let response_text = response.as_str().unwrap();
-    let response_json: serde_json::Value = serde_json::from_str(response_text).unwrap();
-    let code = response_json["code"].as_i64().unwrap();
+    let response_text = response.as_str()?;
+    let response_json: serde_json::Value = serde_json::from_str(response_text)?;
+    let code = response_json["code"].as_i64()
+        .ok_or_else(|| BiliLiveError::ParseError("无法解析响应码".to_string()))?;
     if code == 0 {
-        return true;
+        return Ok(true);
     } else {
-        println!("登录状态异常");
-        return false;
+        user_warning!("登录状态异常");
+        return Ok(false);
     }
 }
 
-pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
+pub fn get_area_choice() -> Result<u32> {
     let response = minreq::get("https://api.live.bilibili.com/room/v1/Area/getList")
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .send()?;
@@ -188,20 +192,20 @@ pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
   
     loop {
         // 显示一级分区
-        println!("\n一级分区列表:");
+        user_info!("一级分区列表:");
         if let Some(data) = area_list["data"].as_array() {
             for (i, area) in data.iter().enumerate() {
-                println!("{}. {}", i+1, area["name"]);
+                user_info!("{}. {}", i+1, area["name"]);
             }
         }
       
-        println!("\n请输入一级分区编号:");
+        user_input_prompt!("请输入一级分区编号: ");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         let first_choice: usize = input.trim().parse()?;
       
         if first_choice == 0 {
-            println!("你是抱着多大的觉悟在一级菜单按下0的？");
+            user_warning!("你是抱着多大的觉悟在一级菜单按下0的？");
             continue;
         }
       
@@ -212,12 +216,12 @@ pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
                 // 显示二级分区
                 if let Some(second_list) = selected_first_area["list"].as_array() {
                     loop {
-                        println!("\n二级分区列表 ({}):", selected_first_area["name"]);
+                        user_info!("二级分区列表 ({}):", selected_first_area["name"]);
                         for (i, area) in second_list.iter().enumerate() {
-                            println!("{}. {} - {}", i+1, area["name"], area["id"]);
+                            user_info!("{}. {} - {}", i+1, area["name"], area["id"]);
                         }
                       
-                        println!("\n请输入二级分区编号(输入0返回):");
+                        user_input_prompt!("请输入二级分区编号(输入0返回): ");
                         let mut second_input = String::new();
                         std::io::stdin().read_line(&mut second_input)?;
                         let second_choice: usize = second_input.trim().parse()?;
@@ -228,57 +232,57 @@ pub fn get_area_choice() -> Result<u32, Box<dyn std::error::Error>> {
                       
                         if second_choice > 0 && second_choice <= second_list.len() {
                             let selected_area = &second_list[second_choice-1];
-                            println!("\n已选择分区: {} (ID: {})", selected_area["name"], selected_area["id"]);
+                            user_success!("已选择分区: {} (ID: {})", selected_area["name"], selected_area["id"]);
                             let id_str = selected_area["id"].as_str().unwrap_or("");
                             let numeric_id: String = id_str.chars().filter(|c| c.is_numeric()).collect();
                             return Ok(numeric_id.parse::<u32>()?);
                         }
                       
-                        println!("无效的选择，请重新输入");
+                        user_warning!("无效的选择，请重新输入");
                     }
                 }
             }
         }
       
-        println!("无效的选择，请重新输入");
+        user_warning!("无效的选择，请重新输入");
     }
 }
 
-pub fn start_login() -> Result<(), Box<dyn std::error::Error>> {
-    println!("开始B站二维码登录流程...");
+pub fn start_login() -> Result<()> {
+    user_info!("开始B站二维码登录流程...");
 
     let qr_data = generate_qr_code()?;
-    println!("请使用B站手机客户端如下链接：{}", qr_data.url);
+    user_info!("请使用B站手机客户端如下链接：{}", qr_data.url);
 
-    println!("或使用B站手机客户端扫描如下二维码");
+    user_info!("或使用B站手机客户端扫描如下二维码");
 
     print_qrcode_in_terminal(&qr_data.url)?;
 
     // 生成二维码图片并保存到本地
     generate_and_save_qrcode(&qr_data.url, "qrcode.png")?;
-    println!("二维码已保存到 qrcode.png");
+    user_success!("二维码已保存到 qrcode.png");
 
-    println!("等待用户处理...");
+    user_info!("等待用户处理...");
 
     // 轮询扫码状态
     loop {
-        let poll_data = poll_qr_status(&qr_data.qrcode_key).expect("轮询登录状态失败");
+        let poll_data = poll_qr_status(&qr_data.qrcode_key)?;
 
         match poll_data.code {
             code if code == QR_STATUS.waiting => {
                 // 可以添加等待提示
             }
             code if code == QR_STATUS.scanned => {
-                println!("已处理，请在手机上确认登录");
+                user_info!("已处理，请在手机上确认登录");
             }
             code if code == QR_STATUS.success => {
-                println!("登录成功！");
+                user_success!("登录成功！");
                 save_cookies(&poll_data.url)?;
                 std::fs::remove_file("qrcode.png")?;
                 break;
             }
             _ => {
-                println!("未知状态：{}", poll_data.message);
+                user_warning!("未知状态：{}", poll_data.message);
                 break;
             }
         }
@@ -289,7 +293,7 @@ pub fn start_login() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// 生成二维码图片并保存到文件
-fn generate_and_save_qrcode(url: &str, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn generate_and_save_qrcode(url: &str, filename: &str) -> Result<()> {
     use qrcode::QrCode;
     use image::Luma;
     use std::path::Path;
@@ -310,7 +314,7 @@ fn generate_and_save_qrcode(url: &str, filename: &str) -> Result<(), Box<dyn std
     Ok(())
 }
 
-fn print_qrcode_in_terminal(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn print_qrcode_in_terminal(url: &str) -> Result<()> {
     use qrcode::QrCode;
     let code = QrCode::new(url.as_bytes())?;
   
@@ -321,13 +325,13 @@ fn print_qrcode_in_terminal(url: &str) -> Result<(), Box<dyn std::error::Error>>
         .quiet_zone(false)
         .build();
   
-    println!("{}", string);
+    user_info!("{}", string);
     Ok(())
 }
 
 // 获取用户最近直播过的分区信息
-pub fn get_recent_live() -> Result<(String, String), Box<dyn std::error::Error>> {
-    let room_id = read_cookies().expect("读取cookies.json错误").room_id;
+pub fn get_recent_live() -> Result<(String, String)> {
+    let room_id = read_cookies()?.room_id;
     let url = format!("https://api.live.bilibili.com/room/v1/Area/getMyChooseArea?roomid={}", room_id);
     let response = minreq::get(&url)
         .with_header("User-Agent", DEFAULT_USER_AGENT)
@@ -336,14 +340,18 @@ pub fn get_recent_live() -> Result<(String, String), Box<dyn std::error::Error>>
     let response_text = response.as_str()?;
     let json: serde_json::Value = serde_json::from_str(response_text)?;
     let data = &json["data"][0];
-    let id = data["id"].as_str().unwrap().to_string();
-    let name = data["name"].as_str().unwrap().to_string();
+    let id = data["id"].as_str()
+        .ok_or_else(|| BiliLiveError::ParseError("无法解析分区ID".to_string()))?
+        .to_string();
+    let name = data["name"].as_str()
+        .ok_or_else(|| BiliLiveError::ParseError("无法解析分区名称".to_string()))?
+        .to_string();
     Ok((id, name))
 }
 
 // 开始直播，获取推流码和推流地址
-pub fn start_live(area_id: &str) -> Result<u64, Box<dyn std::error::Error>> {
-    let cookies = read_cookies().expect("读取cookies.json错误");
+pub fn start_live(area_id: &str) -> Result<u64> {
+    let cookies = read_cookies()?;
   
     // 构建表单数据
     let form_data = format!(
@@ -357,6 +365,7 @@ pub fn start_live(area_id: &str) -> Result<u64, Box<dyn std::error::Error>> {
         .with_header("User-Agent", DEFAULT_USER_AGENT)
         .with_header("Content-Type", "application/x-www-form-urlencoded")
         .with_header("Cookie", &format!("SESSDATA={}", cookies.sessdata))
+        .with_header("platform", "web_electron_link")
         .with_body(form_data)
         .send()?;
 
@@ -364,21 +373,24 @@ pub fn start_live(area_id: &str) -> Result<u64, Box<dyn std::error::Error>> {
     let res: serde_json::Value = serde_json::from_str(response_text)?;
 
     if res["code"].as_i64() != Some(0) {
-        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into());
+        return Err(BiliLiveError::ApiError(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误"))));
     }
 
-    let rtmp_addr = res["data"]["rtmp"]["addr"].as_str().ok_or("缺少rtmp地址")?;
-    let rtmp_code = res["data"]["rtmp"]["code"].as_str().ok_or("缺少rtmp code")?;
-    let live_key = res["data"]["live_key"].as_str().ok_or("缺少live_key")?;
+    let rtmp_addr = res["data"]["rtmp"]["addr"].as_str()
+        .ok_or_else(|| BiliLiveError::ParseError("缺少rtmp地址".to_string()))?;
+    let rtmp_code = res["data"]["rtmp"]["code"].as_str()
+        .ok_or_else(|| BiliLiveError::ParseError("缺少rtmp code".to_string()))?;
+    let live_key = res["data"]["live_key"].as_str()
+        .ok_or_else(|| BiliLiveError::ParseError("缺少live_key".to_string()))?;
   
-    println!("RTMP地址: {}", rtmp_addr);
-    println!("直播码: {}", rtmp_code);
+    user_success!("RTMP地址: {}", rtmp_addr);
+    user_success!("推流码: {}", rtmp_code);
 
     Ok(live_key.parse::<u64>()?)
 }
 
-pub fn stop_live(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
-    let cookies = read_cookies().expect("读取cookies.json错误");
+pub fn stop_live(live_id: u64) -> Result<()> {
+    let cookies = read_cookies()?;
   
     // 构建表单数据
     let form_data = format!(
@@ -398,18 +410,18 @@ pub fn stop_live(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
     let res: serde_json::Value = serde_json::from_str(response_text)?;
 
     if res["code"].as_i64() != Some(0) {
-        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into());
+        return Err(BiliLiveError::ApiError(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误"))));
     }
   
-    println!("成功关闭直播");
+    user_success!("成功关闭直播");
 
     get_live_info(live_id)?;
 
     Ok(())
 }
 
-fn get_live_info(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
-    let cookies = read_cookies().expect("读取cookies.json错误");
+fn get_live_info(live_id: u64) -> Result<()> {
+    let cookies = read_cookies()?;
     let url = format!("https://api.live.bilibili.com/xlive/app-blink/v1/live/StopLiveData?live_key={}", live_id);
   
     let response = minreq::get(&url)
@@ -422,18 +434,18 @@ fn get_live_info(live_id: u64) -> Result<(), Box<dyn std::error::Error>> {
     let res: serde_json::Value = serde_json::from_str(response_text)?;
   
     if res["code"].as_i64() != Some(0) {
-        return Err(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into());
+        return Err(BiliLiveError::ApiError(format!("API返回错误: {}", res["message"].as_str().unwrap_or("未知错误")).into()));
     }
   
     let data = &res["data"];
-    println!("直播统计信息:");
-    println!("新增粉丝 : {}", data["AddFans"].as_i64().unwrap_or(0));
-    println!("弹幕数 : {}", data["DanmuNum"].as_i64().unwrap_or(0));
-    println!("金仓鼠流水 : {}", data["HamsterRmb"].as_i64().unwrap_or(0));
-    println!("直播时长 : {}", data["LiveTime"].as_i64().unwrap_or(0));
-    println!("最大在线 : {}", data["MaxOnline"].as_i64().unwrap_or(0));
-    println!("新增粉丝勋章 : {}", data["NewFansClub"].as_i64().unwrap_or(0));
-    println!("累计观看 : {}", data["WatchedCount"].as_i64().unwrap_or(0));
+    user_info!("直播统计信息:");
+    user_info!("新增粉丝 : {}", data["AddFans"].as_i64().unwrap_or(0));
+    user_info!("弹幕数 : {}", data["DanmuNum"].as_i64().unwrap_or(0));
+    user_info!("金仓鼠流水 : {}", data["HamsterRmb"].as_i64().unwrap_or(0));
+    user_info!("直播时长 : {}", data["LiveTime"].as_i64().unwrap_or(0));
+    user_info!("最大在线 : {}", data["MaxOnline"].as_i64().unwrap_or(0));
+    user_info!("新增粉丝勋章 : {}", data["NewFansClub"].as_i64().unwrap_or(0));
+    user_info!("累计观看 : {}", data["WatchedCount"].as_i64().unwrap_or(0));
 
     Ok(())
 }
