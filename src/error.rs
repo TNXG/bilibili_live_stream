@@ -2,8 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum BiliLiveError {
-    #[error("网络请求失败: {0}")]
-    NetworkError(#[from] minreq::Error),
+    #[error("Reqwest网络请求失败: {0}")]
+    ReqwestNetworkError(#[from] reqwest::Error),
 
     #[error("JSON解析失败: {0}")]
     JsonError(#[from] serde_json::Error),
