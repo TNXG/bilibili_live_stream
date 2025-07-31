@@ -14,12 +14,12 @@ strip = "symbols"
 ctrlc = "3"
 image = { version = "0.25", default-features = false, features = ["png"] }
 qrcode = "0.14"
-# reqwest = { version = "0.12", default-features = false, features = [
-#     "blocking",
-#     "json",
-#     "rustls-tls",
-#     "cookies",
-# ] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "json",
+    "rustls-tls",
+    "cookies",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 openssl = { version = "0.10", features = ["vendored"] }
