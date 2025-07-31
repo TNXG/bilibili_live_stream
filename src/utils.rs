@@ -29,7 +29,8 @@ struct QrPollResponseData {
     #[serde(deserialize_with = "deserialize_qr_poll_url")]
     url: Option<Url>,
     code: QrStatus,
-    _message: String,
+    #[allow(dead_code)]
+    message: String,
 }
 
 fn deserialize_qr_poll_url<'de, D>(deserializer: D) -> std::result::Result<Option<Url>, D::Error>
@@ -80,7 +81,6 @@ static CLIENT: LazyLock<reqwest::blocking::Client> = LazyLock::new(|| {
 #[derive(Debug, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(i32)]
-#[allow(dead_code)]
 enum QrStatus {
     Waiting = 86101, // 等待扫码
     Scanned = 86090, // 已扫码，等待确认
