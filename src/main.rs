@@ -1,14 +1,14 @@
-mod utils;
 mod error;
 mod logger;
+mod utils;
 
-use error::{BiliLiveError, Result};
 use crate::logger::init_logger;
+use error::{BiliLiveError, Result};
 
 fn main() {
     // 初始化日志系统
     init_logger();
-    
+
     if let Err(e) = run() {
         user_error!("程序执行失败: {}", e);
         std::process::exit(1);
@@ -35,7 +35,8 @@ fn run() -> Result<()> {
     let area_id = if input.trim().is_empty() || input.trim().to_lowercase() == "y" {
         let (id, name) = utils::get_recent_live()?;
         user_success!("使用上次的分区: {} - {}", name, id);
-        id.parse().map_err(|e| BiliLiveError::ParseError(format!("分区ID转换失败: {}", e)))?
+        id.parse()
+            .map_err(|e| BiliLiveError::ParseError(format!("分区ID转换失败: {}", e)))?
     } else {
         user_info!("选择合适的直播分区！");
         utils::get_area_choice()?
