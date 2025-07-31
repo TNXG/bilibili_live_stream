@@ -1,8 +1,9 @@
 use crate::error::{BiliLiveError, Result};
 use crate::{user_info, user_input_prompt, user_success, user_warning};
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use reqwest::header::{CONTENT_TYPE, COOKIE};
 use serde::{Deserialize, Serialize};
-use serde_repr::Deserialize_repr;
 use std::{fs, sync::LazyLock};
 use url::Url;
 
@@ -28,7 +29,7 @@ struct QRKeyResponse {
 struct QrPollResponseData {
     #[serde(deserialize_with = "deserialize_qr_poll_url")]
     url: Option<Url>,
-    code: QrStatus,
+    code: i32,
     #[allow(dead_code)]
     message: String,
 }
@@ -78,9 +79,7 @@ static CLIENT: LazyLock<reqwest::blocking::Client> = LazyLock::new(|| {
         .expect("Failed to create HTTP client")
 });
 
-#[derive(Debug, Deserialize_repr)]
-#[serde(untagged)]
-#[repr(i32)]
+#[derive(FromPrimitive)]
 enum QrStatus {
     Waiting = 86101, // 等待扫码
     Scanned = 86090, // 已扫码，等待确认
@@ -281,14 +280,14 @@ pub fn start_login() -> Result<()> {
     loop {
         let poll_data = poll_qr_status(&qr_data.qrcode_key)?;
 
-        match poll_data.code {
-            QrStatus::Waiting => {
+        match QrStatus::from_i32(poll_data.code) {
+            Some(QrStatus::Waiting) => {
                 // 可以添加等待提示
             }
-            QrStatus::Scanned => {
+            Some(QrStatus::Scanned) => {
                 user_info!("已处理，请在手机上确认登录");
             }
-            QrStatus::Success => {
+            Some(QrStatus::Success) => {
                 user_success!("登录成功！");
                 let url = poll_data.url.ok_or_else(|| {
                     BiliLiveError::ParseError("二维码登录成功后未返回URL".to_string())
@@ -296,6 +295,18 @@ pub fn start_login() -> Result<()> {
                 save_cookies(&url)?;
                 std::fs::remove_file("qrcode.png")?;
                 break;
+            }
+            _ => {
+                user_warning!(
+                    "未知状态码: {}, 消息: {}",
+                    poll_data.code,
+                    poll_data.message
+                );
+                std::fs::remove_file("qrcode.png")?;
+                return Err(BiliLiveError::ParseError(format!(
+                    "二维码登录失败，状态码: {}, 消息: {}",
+                    poll_data.code, poll_data.message
+                )));
             }
         }
         std::thread::sleep(std::time::Duration::from_secs(2));
