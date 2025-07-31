@@ -37,8 +37,8 @@ fn deserialize_qr_poll_url<'de, D>(deserializer: D) -> std::result::Result<Optio
 where
     D: serde::Deserializer<'de>,
 {
-    let url_str: &str = Deserialize::deserialize(deserializer)?;
-    let Ok(url) = Url::parse(url_str) else {
+    let url_str: String = Deserialize::deserialize(deserializer)?;
+    let Ok(url) = Url::parse(&url_str) else {
         return Ok(None);
     };
     Ok(Some(url))
