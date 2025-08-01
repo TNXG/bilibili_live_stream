@@ -316,16 +316,20 @@ fn generate_and_save_qrcode(url: &str, filename: &str) -> Result<()> {
 
 fn print_qrcode_in_terminal(url: &str) -> Result<()> {
     use qrcode::QrCode;
+    use std::io::Write;
+
     let code = QrCode::new(url.as_bytes())?;
   
     // 转换为ASCII字符串
     let string = code.render()
-        .light_color(' ')  // 浅色部分用空格
-        .dark_color('█')  // 深色部分用方块
+        .light_color("  ")  // 浅色部分用空格
+        .dark_color("██")  // 深色部分用方块
         .quiet_zone(false)
         .build();
   
-    user_info!("{}", string);
+    // 直接打印二维码，不使用日志宏，避免格式干扰
+    println!("{}", string);
+    std::io::stdout().flush()?;
     Ok(())
 }
 
