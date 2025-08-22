@@ -4,18 +4,29 @@ mod logger;
 
 use error::{BiliLiveError, Result};
 use crate::logger::init_logger;
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// 直接显示完整的推流码（不打码）
+    #[arg(long, help = "显示完整的推流码，不进行打码处理")]
+    show_full_code: bool,
+}
 
 fn main() {
+    let args = Args::parse();
+    
     // 初始化日志系统
     init_logger();
     
-    if let Err(e) = run() {
+    if let Err(e) = run(args) {
         user_error!("程序执行失败: {}", e);
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<()> {
+fn run(args: Args) -> Result<()> {
     let check_status = utils::check_status()?;
 
     if !check_status {
@@ -43,7 +54,7 @@ fn run() -> Result<()> {
 
     // 开始直播
     user_info!("开始直播！");
-    let live_id = utils::start_live(&area_id.to_string())?;
+    let live_id = utils::start_live(&area_id.to_string(), args.show_full_code)?;
 
     user_info!("请在本程序中按 Ctrl+C 关闭直播！否则直播将不会关闭！");
 

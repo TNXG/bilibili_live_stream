@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use crate::error::{BiliLiveError, Result};
 use crate::{user_info, user_success, user_warning, user_input_prompt};
+use copypasta::{ClipboardContext, ClipboardProvider};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Cookies {
@@ -66,6 +67,31 @@ pub const QR_STATUS: QRStatus = QRStatus {
     scanned: 86090, // 已扫码，等待确认
     success: 0,     // 登录成功
 };
+
+/// 复制文本到剪贴板
+fn copy_to_clipboard(text: &str) -> Result<()> {
+    match ClipboardContext::new() {
+        Ok(mut ctx) => {
+            ctx.set_contents(text.to_owned())
+                .map_err(|e| BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, format!("复制到剪贴板失败: {}", e))))?;
+            Ok(())
+        }
+        Err(e) => {
+            Err(BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, format!("无法访问剪贴板: {}", e))))
+        }
+    }
+}
+
+/// 打码显示推流码（只显示前6位和后4位）
+fn mask_rtmp_code(code: &str) -> String {
+    if code.len() <= 10 {
+        return code.to_string();
+    }
+    let prefix = &code[..6];
+    let suffix = &code[code.len()-4..];
+    let masked_length = code.len() - 10;
+    format!("{}{}...{}", prefix, "*".repeat(masked_length.min(12)), suffix)
+}
 
 fn generate_qr_code() -> Result<QRKeyResponseData> {
     let response = minreq::get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate")
@@ -354,7 +380,7 @@ pub fn get_recent_live() -> Result<(String, String)> {
 }
 
 // 开始直播，获取推流码和推流地址
-pub fn start_live(area_id: &str) -> Result<u64> {
+pub fn start_live(area_id: &str, show_full_code: bool) -> Result<u64> {
     let cookies = read_cookies()?;
   
     // 构建表单数据
@@ -388,7 +414,19 @@ pub fn start_live(area_id: &str) -> Result<u64> {
         .ok_or_else(|| BiliLiveError::ParseError("缺少live_key".to_string()))?;
   
     user_success!("RTMP地址: {}", rtmp_addr);
-    user_success!("推流码: {}", rtmp_code);
+    
+    // 根据参数决定是否打码显示推流码
+    if show_full_code {
+        user_success!("推流码: {}", rtmp_code);
+    } else {
+        user_success!("推流码: {}", mask_rtmp_code(rtmp_code));
+    }
+    
+    // 自动复制推流码到剪贴板
+    match copy_to_clipboard(rtmp_code) {
+        Ok(()) => user_success!("推流码已自动复制到剪贴板！"),
+        Err(e) => user_warning!("复制到剪贴板失败: {}，请手动复制", e),
+    }
 
     Ok(live_key.parse::<u64>()?)
 }
