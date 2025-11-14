@@ -39,28 +39,28 @@ pub fn init_logger() {
 #[macro_export]
 macro_rules! user_info {
     ($($arg:tt)*) => {
-        log::info!($($arg)*);
+        log::info!($($arg)*)
     };
 }
 
 #[macro_export]
 macro_rules! user_success {
     ($($arg:tt)*) => {
-        log::info!("✅ {}", format!($($arg)*));
+        log::info!("✅ {}", format!($($arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! user_warning {
     ($($arg:tt)*) => {
-        log::warn!("⚠️ {}", format!($($arg)*));
+        log::warn!("⚠️ {}", format!($($arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! user_error {
     ($($arg:tt)*) => {
-        log::error!("❌ {}", format!($($arg)*));
+        log::error!("❌ {}", format!($($arg)*))
     };
 }
 
