@@ -32,7 +32,13 @@ jobs:
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             cross: false
-          
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            cross: true
+          - os: windows-latest
+            target: i686-pc-windows-gnu
+            cross: true
+
           # macOS targets
           - os: macos-latest
             target: x86_64-apple-darwin
@@ -40,7 +46,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             cross: false
-          
+
           # Linux targets (native)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -55,10 +61,37 @@ jobs:
             target: armv7-unknown-linux-gnueabihf
             cross: true
           - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabi
+            cross: true
+          - os: ubuntu-latest
             target: arm-unknown-linux-gnueabihf
             cross: true
-          
-          # Linux musl targets
+          - os: ubuntu-latest
+            target: i586-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: loongarch64-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: powerpc-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: powerpc64-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: powerpc64le-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: s390x-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: sparc64-unknown-linux-gnu
+            cross: true
+
+          # Linux musl targets (static linking)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             cross: true
@@ -67,6 +100,48 @@ jobs:
             cross: true
           - os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
+            cross: true
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-musleabi
+            cross: true
+          - os: ubuntu-latest
+            target: i586-unknown-linux-musl
+            cross: true
+          - os: ubuntu-latest
+            target: i686-unknown-linux-musl
+            cross: true
+          - os: ubuntu-latest
+            target: loongarch64-unknown-linux-musl
+            cross: true
+          - os: ubuntu-latest
+            target: powerpc64le-unknown-linux-musl
+            cross: true
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-musl
+            cross: true
+
+          # Android targets
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            cross: true
+          - os: ubuntu-latest
+            target: i686-linux-android
+            cross: true
+
+          # Android OHOS targets
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-ohos
+            cross: true
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-ohos
+            cross: true
+
+          # WebAssembly targets
+          - os: ubuntu-latest
+            target: wasm32-unknown-unknown
+            cross: false
+          - os: ubuntu-latest
+            target: wasm32-wasi
             cross: true
 
     steps:
@@ -124,14 +199,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
-          
+
           # Get binary name from Cargo.toml
           $binaryName = (Select-String -Path "Cargo.toml" -Pattern '^name = "(.+)"').Matches[0].Groups[1].Value
-          
+
           # Source and destination paths
           $sourcePath = "target\${{ matrix.target }}\release\${binaryName}.exe"
           $destPath = "artifacts\${binaryName}-${{ matrix.target }}.exe"
-          
+
           # Copy and verify
           if (Test-Path $sourcePath) {
             Copy-Item $sourcePath $destPath
@@ -151,14 +226,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
-          
+
           # Find the binary name from Cargo.toml
           BINARY_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
-          
+
           # Source and destination paths
           SOURCE_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}"
           DEST_PATH="artifacts/${BINARY_NAME}-${{ matrix.target }}"
-          
+
           # Copy and verify
           if [[ -f "${SOURCE_PATH}" ]]; then
             cp "${SOURCE_PATH}" "${DEST_PATH}"
@@ -191,7 +266,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -220,41 +295,121 @@ jobs:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           body: |
-            ## Release ${{ github.ref_name }}
-            
-            This release contains pre-compiled binaries for multiple platforms and architectures:
-            
-            ### Windows
-            - `*-x86_64-pc-windows-msvc.exe` - Windows 64-bit (Intel/AMD)
-            - `*-i686-pc-windows-msvc.exe` - Windows 32-bit (Intel/AMD)
-            - `*-aarch64-pc-windows-msvc.exe` - Windows ARM64
-            
-            ### macOS
-            - `*-x86_64-apple-darwin` - macOS Intel (x64)
-            - `*-aarch64-apple-darwin` - macOS Apple Silicon (M1/M2)
-            
-            ### Linux (GNU)
-            - `*-x86_64-unknown-linux-gnu` - Linux x64
-            - `*-i686-unknown-linux-gnu` - Linux x86
-            - `*-aarch64-unknown-linux-gnu` - Linux ARM64
-            - `*-armv7-unknown-linux-gnueabihf` - Linux ARMv7
-            - `*-arm-unknown-linux-gnueabihf` - Linux ARM
-            
-            ### Linux (musl - static linking)
-            - `*-x86_64-unknown-linux-musl` - Linux x64 (static)
-            - `*-aarch64-unknown-linux-musl` - Linux ARM64 (static)
-            - `*-armv7-unknown-linux-musleabihf` - Linux ARMv7 (static)
-            
-            ### Installation
-            1. Download the appropriate binary for your platform
-            2. Make it executable (Unix systems): `chmod +x binary-name`
-            3. Run the binary
-            
-            ### Verification
-            You can verify the integrity of downloaded files using the provided `SHA256SUMS` file.
-            
-            **Built with:** Rust stable
-            **Automated build:** GitHub Actions
+            ## 📦 新版本发布 ${{ github.ref_name }}
+
+            本次发布为多个平台和架构编译了预构建二进制文件，共 **48 个目标**。
+
+            ### 🪟 Windows 系统
+            | 文件 | 说明 |
+            |------|------|
+            | `*-x86_64-pc-windows-msvc.exe` | Windows 64-bit (Intel/AMD, MSVC) |
+            | `*-i686-pc-windows-msvc.exe` | Windows 32-bit (Intel/AMD, MSVC) |
+            | `*-aarch64-pc-windows-msvc.exe` | Windows ARM64 (MSVC) |
+            | `*-x86_64-pc-windows-gnu.exe` | Windows 64-bit (Intel/AMD, MinGW) |
+            | `*-i686-pc-windows-gnu.exe` | Windows 32-bit (Intel/AMD, MinGW) |
+
+            ### 🍎 macOS 系统
+            | 文件 | 说明 |
+            |------|------|
+            | `*-x86_64-apple-darwin` | Intel 处理器 (x64) |
+            | `*-aarch64-apple-darwin` | Apple Silicon (M1/M2/M3/M4/M5+) |
+
+            ### 🐧 Linux 系统 (GNU - 动态链接)
+            | 文件 | 说明 |
+            |------|------|
+            | `*-x86_64-unknown-linux-gnu` | Linux x64（最常用） |
+            | `*-i686-unknown-linux-gnu` | Linux x86 |
+            | `*-aarch64-unknown-linux-gnu` | Linux ARM64（树莓派 4+ 等） |
+            | `*-armv7-unknown-linux-gnueabihf` | Linux ARMv7（树莓派 2/3 等） |
+            | `*-armv7-unknown-linux-gnueabi` | Linux ARMv7（软浮点） |
+            | `*-arm-unknown-linux-gnueabihf` | Linux ARM |
+            | `*-powerpc-unknown-linux-gnu` | Linux PowerPC |
+            | `*-powerpc64-unknown-linux-gnu` | Linux PowerPC64 |
+            | `*-powerpc64le-unknown-linux-gnu` | Linux PowerPC64LE |
+            | `*-riscv64gc-unknown-linux-gnu` | Linux RISC-V 64-bit |
+            | `*-s390x-unknown-linux-gnu` | Linux s390x（IBM 大型机） |
+            | `*-sparc64-unknown-linux-gnu` | Linux SPARC64 |
+            | `*-loongarch64-unknown-linux-gnu` | Linux LoongArch 64-bit（龙芯） |
+            | `*-i586-unknown-linux-gnu` | Linux x586 |
+
+            ### 🐧 Linux 系统 (musl - 静态链接)
+            独立性强，推荐在多个 Linux 发行版间使用。
+
+            | 文件 | 说明 |
+            |------|------|
+            | `*-x86_64-unknown-linux-musl` | Linux x64（静态） |
+            | `*-i686-unknown-linux-musl` | Linux x86（静态） |
+            | `*-i586-unknown-linux-musl` | Linux x586（静态） |
+            | `*-aarch64-unknown-linux-musl` | Linux ARM64（静态） |
+            | `*-armv7-unknown-linux-musleabihf` | Linux ARMv7（静态，硬浮点） |
+            | `*-armv7-unknown-linux-musleabi` | Linux ARMv7（静态，软浮点） |
+            | `*-powerpc64le-unknown-linux-musl` | Linux PowerPC64LE（静态） |
+            | `*-riscv64gc-unknown-linux-musl` | Linux RISC-V 64-bit（静态） |
+            | `*-loongarch64-unknown-linux-musl` | Linux LoongArch 64-bit（静态） |
+
+            ### 📱 Android 系统
+            | 文件 | 说明 |
+            |------|------|
+            | `*-aarch64-linux-android` | Android ARM64 |
+            | `*-i686-linux-android` | Android x86 |
+
+            ### 🔴 HarmonyOS（鸿蒙/OpenHarmony）
+            | 文件 | 说明 |
+            |------|------|
+            | `*-aarch64-unknown-linux-ohos` | HarmonyOS ARM64 |
+            | `*-armv7-unknown-linux-ohos` | HarmonyOS ARMv7 |
+
+            ### 🕸️ WebAssembly
+            | 文件 | 说明 |
+            |------|------|
+            | `*-wasm32-unknown-unknown` | WASM 独立版 |
+            | `*-wasm32-wasi` | WASM + WASI 版 |
+
+            ---
+
+            ## 📥 快速开始
+
+            ### 1️⃣ 选择合适的版本
+            根据你的操作系统和处理器架构选择对应的二进制文件。不确定？
+            - **Windows**：通常选择 `x86_64-pc-windows-msvc` 版本
+            - **macOS**：如果是 Apple Silicon (M1/M2/M3/M4/M5+) 芯片选择 `aarch64-apple-darwin`，Intel 选择 `x86_64-apple-darwin`
+            - **Linux**：如果是动态链接系统选择 `*-gnu` 版本，Alpine 等选择 `*-musl` 版本
+
+            ### 2️⃣ 下载并使用
+
+            **macOS / Linux：**
+            ```bash
+            # 下载后赋予执行权限
+            chmod +x bili_live-<target>
+
+            # 运行程序
+            ./bili_live-<target>
+            ```
+
+            如macOS遇“无法打开，因为它来自身份不明的开发者”，可在“系统设置 → 隐私与安全性”中允许该程序运行，或在终端执行：
+
+            ```bash
+              xattr -d com.apple.quarantine bili_live-<target>
+            ```
+
+            ### 3️⃣ 校验文件完整性（可选）
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+
+            ---
+
+            ## ℹ️ 更多信息
+
+            📖 详细使用说明请参考 [README.md](https://github.com/TNXG/bilibili_live_stream#readme)
+
+            🛠️ 所有支持平台的详细信息：[TARGETS.md](https://github.com/TNXG/bilibili_live_stream/blob/master/TARGETS.md)
+
+            ⚠️ **重要提示**：推流码为敏感信息，请妥善保管 Cookie 信息，遵守相关协议，避免高频调用导致账号风控！
+
+            ---
+
+            **编译工具**：Rust stable | **构建平台**：GitHub Actions
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           files: |
@@ -279,7 +434,7 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: macos-latest
             target: x86_64-apple-darwin
-    
+
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -293,7 +448,7 @@ jobs:
         run: |
           $binary = Get-ChildItem -File | Select-Object -First 1
           Write-Host "Testing binary: $($binary.Name)"
-          
+
           # Example: Run with --version flag
           try {
             & ".\$($binary.Name)" --version
@@ -311,10 +466,10 @@ jobs:
         run: |
           # Make executable
           chmod +x ./*
-          
+
           # Run basic test
           BINARY=$(ls ./* | head -1)
           echo "Testing binary: $BINARY"
-          
+
           # Example: Run with --version flag
           ./$BINARY --version || ./$BINARY --help || echo "Binary executed"

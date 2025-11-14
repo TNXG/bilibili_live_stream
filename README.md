@@ -20,11 +20,19 @@
 
 ### 预编译版本
 
-支持以下平台，可前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载最新版本：
+**推荐方式**：前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载预编译的二进制文件。
 
-- Windows x86_64  
-- Linux x86_64 / aarch64  
-- macOS Intel (x86_64) / Apple Silicon (aarch64)  
+支持 **48 个平台和架构**，包括但不限于：
+
+- **Windows**：x86_64 / i686 / ARM64 (MSVC & MinGW)
+- **macOS**：Intel (x86_64) / Apple Silicon (aarch64)  
+- **Linux (GNU)**：x86_64 / i686 / ARM64 / ARMv7 / PowerPC / RISC-V / s390x / LoongArch 等
+- **Linux (musl)**：静态链接版本，兼容 Alpine 等最小化发行版
+- **Android**：ARM64 / x86
+- **HarmonyOS**：ARM64 / ARMv7
+- **WebAssembly**：WASM / WASI
+
+详见 [TARGETS.md](./TARGETS.md) 了解所有支持的目标平台。
 
 ### 自行编译
 
@@ -35,7 +43,7 @@
 - 在 Unix / Linux 系统中执行：
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-````
+```
 
 - 在 Windows 系统中使用：
 
@@ -60,22 +68,28 @@ cargo build --release
 
 编译完成后，可执行文件将在 `target/release/` 目录下生成。
 
-## 🍎 macOS 下 Release 包使用说明
+## 🍎 macOS 下使用
 
-1. 前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合你设备架构的 macOS 版本（Intel x86_64 或 Apple Silicon aarch64）。
-2. 下载后，解压压缩包（如有）。
-3. 打开终端，进入解压目录，赋予可执行权限：
+1. 前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合你的版本：
+   - **Apple Silicon (M1/M2/M3/M4/M5+)**：选择 `aarch64-apple-darwin` 版本
+   - **Intel 处理器**：选择 `x86_64-apple-darwin` 版本
+   
+2. 解压下载的文件（如有压缩包）
+
+3. 打开终端，进入文件所在目录，赋予可执行权限：
    ```bash
-   chmod +x bili_live
+   chmod +x ./bili_live-<target>
    ```
+
 4. 运行程序：
    ```bash
-   ./bili_live
+   ./bili_live-<target>
    ```
-5. 如遇“无法打开，因为它来自身份不明的开发者”，可在“系统设置 → 隐私与安全性”中允许该程序运行，或在终端执行：
-   ```bash
-   xattr -d com.apple.quarantine bili_live
-   ```
+
+5. **常见问题处理**：
+   - 如遇 "无法打开，因为它来自身份不明的开发者" 警告：
+     - **方法一**：在系统设置 → 隐私与安全性 中允许该程序
+     - **方法二**：在终端执行 `xattr -d com.apple.quarantine ./bili_live-<target>` 移除隔离属性
 
 ## 🐧 Linux 下 Release 包使用说明
 
@@ -83,11 +97,11 @@ cargo build --release
 2. 下载后，解压压缩包（如有）。
 3. 打开终端，进入解压目录，赋予可执行权限：
    ```bash
-   chmod +x bili_live
+   chmod +x bili_live-<target>
    ```
 4. 运行程序：
    ```bash
-   ./bili_live
+   ./bili_live-<target>
    ```
 5. 如遇“权限不足”或“找不到命令”，请确认当前目录下有`bili_live`文件，并已赋予可执行权限。
 6. 如遇“缺少依赖库”报错（如`libssl`等），可通过包管理器安装所需依赖。例如在Debian/Ubuntu系统：
