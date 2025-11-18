@@ -20,11 +20,42 @@
 
 ### 预编译版本
 
-支持以下平台，可前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载最新版本：
+本项目支持多个平台和架构，按照 Rust 平台支持层级提供预编译二进制文件。可前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载最新版本：
 
-- Windows x86_64  
-- Linux x86_64 / aarch64  
-- macOS Intel (x86_64) / Apple Silicon (aarch64)  
+#### 🥇 Tier 1 平台（保证可用）
+Tier 1 平台具有最高级别的支持，保证构建成功并经过官方测试。
+
+- **Windows (Tier 1)**
+  - x86_64 (64位 Intel/AMD)
+  - i686 (32位 Intel/AMD)
+
+- **macOS (Tier 1)**
+  - x86_64 (Intel 处理器)
+  - aarch64 (Apple Silicon M1/M2/M3)
+
+- **Linux (Tier 1)**
+  - x86_64 (64位)
+  - i686 (32位)
+
+#### 🥈 Tier 2 with Host Tools（支持交叉编译和测试）
+Tier 2 with Host Tools 平台具有官方构建支持，可以运行自动化测试。
+
+- **Windows (Tier 2 with Host Tools)**
+  - aarch64 (ARM64 架构，如 Surface Pro X)
+
+- **Linux (Tier 2 with Host Tools)**
+  - aarch64-gnu (ARM64 架构，如树莓派 3+、服务器)
+  - x86_64-musl (x64 静态链接版本，适用于 Alpine、容器)
+
+#### 🥉 Tier 2 without Host Tools（仅交叉编译）
+Tier 2 without Host Tools 平台通过交叉编译构建，可能需要额外测试。
+
+- **Linux (Tier 2 without Host Tools)**
+  - armv7-gnueabihf (ARMv7 硬浮点，如树莓派 2)
+  - arm-gnueabihf (ARM 硬浮点，旧设备)
+  - aarch64-musl (ARM64 静态链接，Alpine on ARM)
+  - armv7-musleabihf (ARMv7 静态链接，容器)
+  - i686-musl (32位 x86 静态链接)  
 
 ### 自行编译
 
@@ -62,7 +93,8 @@ cargo build --release
 
 ## 🍎 macOS 下 Release 包使用说明
 
-1. 前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合你设备架构的 macOS 版本（Intel x86_64 或 Apple Silicon aarch64）。
+1. 前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合你设备架构的 macOS 版本：
+   - **Tier 1 平台**：Intel x86_64 或 Apple Silicon aarch64（推荐）
 2. 下载后，解压压缩包（如有）。
 3. 打开终端，进入解压目录，赋予可执行权限：
    ```bash
@@ -79,7 +111,10 @@ cargo build --release
 
 ## 🐧 Linux 下 Release 包使用说明
 
-1. 前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合你设备架构的 Linux 版本（x86_64 或 aarch64）。
+1. 前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合你设备架构的 Linux 版本。
+   - **Tier 1 平台**（推荐）：x86_64-gnu, i686-gnu
+   - **Tier 2 with Host Tools**：aarch64-gnu, x86_64-musl
+   - **Tier 2 without Host Tools**：armv7-gnueabihf, arm-gnueabihf, aarch64-musl, armv7-musleabihf, i686-musl
 2. 下载后，解压压缩包（如有）。
 3. 打开终端，进入解压目录，赋予可执行权限：
    ```bash
@@ -89,8 +124,12 @@ cargo build --release
    ```bash
    ./bili_live
    ```
-5. 如遇“权限不足”或“找不到命令”，请确认当前目录下有`bili_live`文件，并已赋予可执行权限。
-6. 如遇“缺少依赖库”报错（如`libssl`等），可通过包管理器安装所需依赖。例如在Debian/Ubuntu系统：
+5. 如遇"权限不足"或"找不到命令"，请确认当前目录下有`bili_live`文件，并已赋予可执行权限。
+6. **依赖说明**：
+   - **GNU 版本**（gnueabihf/gnu）：需要系统提供动态链接库（如 libssl）
+   - **musl 版本**（musl/musleabihf）：静态链接，通常无需额外依赖，适合容器和最小化系统
+   
+   如遇"缺少依赖库"报错（仅 GNU 版本），可通过包管理器安装所需依赖。例如在Debian/Ubuntu系统：
    ```bash
    sudo apt-get update
    sudo apt-get install -y libssl-dev

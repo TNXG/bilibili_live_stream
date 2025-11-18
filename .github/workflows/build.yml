@@ -22,52 +22,85 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows targets
+          # ==========================================
+          # Tier 1 Platforms (guaranteed to work)
+          # ==========================================
+          
+          # Windows Tier 1
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             cross: false
+            tier: 1
           - os: windows-latest
             target: i686-pc-windows-msvc
             cross: false
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
-            cross: false
+            tier: 1
           
-          # macOS targets
+          # macOS Tier 1
           - os: macos-latest
             target: x86_64-apple-darwin
             cross: false
+            tier: 1
           - os: macos-latest
             target: aarch64-apple-darwin
             cross: false
+            tier: 1
           
-          # Linux targets (native)
+          # Linux Tier 1
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             cross: false
+            tier: 1
           - os: ubuntu-latest
             target: i686-unknown-linux-gnu
             cross: true
+            tier: 1
+          
+          # ==========================================
+          # Tier 2 with Host Tools (can cross-compile and run tests)
+          # ==========================================
+          
+          # Windows Tier 2 with Host Tools
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            cross: false
+            tier: 2-host
+          
+          # Linux Tier 2 with Host Tools
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             cross: true
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            cross: true
-          - os: ubuntu-latest
-            target: arm-unknown-linux-gnueabihf
-            cross: true
-          
-          # Linux musl targets
+            tier: 2-host
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             cross: true
+            tier: 2-host
+          
+          # ==========================================
+          # Tier 2 without Host Tools (cross-compile only)
+          # ==========================================
+          
+          # Linux Tier 2 without Host Tools
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            cross: true
+            tier: 2-no-host
+          - os: ubuntu-latest
+            target: arm-unknown-linux-gnueabihf
+            cross: true
+            tier: 2-no-host
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             cross: true
+            tier: 2-no-host
           - os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
             cross: true
+            tier: 2-no-host
+          - os: ubuntu-latest
+            target: i686-unknown-linux-musl
+            cross: true
+            tier: 2-no-host
 
     steps:
       - name: Checkout repository
@@ -222,39 +255,62 @@ jobs:
           body: |
             ## Release ${{ github.ref_name }}
             
-            This release contains pre-compiled binaries for multiple platforms and architectures:
+            This release contains pre-compiled binaries for multiple platforms and architectures, organized by Rust platform support tier.
             
-            ### Windows
+            ### 🥇 Tier 1 Platforms (Guaranteed to work)
+            Tier 1 platforms have the highest level of support with guaranteed builds and official testing.
+            
+            #### Windows (Tier 1)
             - `*-x86_64-pc-windows-msvc.exe` - Windows 64-bit (Intel/AMD)
             - `*-i686-pc-windows-msvc.exe` - Windows 32-bit (Intel/AMD)
-            - `*-aarch64-pc-windows-msvc.exe` - Windows ARM64
             
-            ### macOS
+            #### macOS (Tier 1)
             - `*-x86_64-apple-darwin` - macOS Intel (x64)
-            - `*-aarch64-apple-darwin` - macOS Apple Silicon (M1/M2)
+            - `*-aarch64-apple-darwin` - macOS Apple Silicon (M1/M2/M3)
             
-            ### Linux (GNU)
+            #### Linux (Tier 1)
             - `*-x86_64-unknown-linux-gnu` - Linux x64
-            - `*-i686-unknown-linux-gnu` - Linux x86
-            - `*-aarch64-unknown-linux-gnu` - Linux ARM64
-            - `*-armv7-unknown-linux-gnueabihf` - Linux ARMv7
-            - `*-arm-unknown-linux-gnueabihf` - Linux ARM
+            - `*-i686-unknown-linux-gnu` - Linux x86 (32-bit)
             
-            ### Linux (musl - static linking)
-            - `*-x86_64-unknown-linux-musl` - Linux x64 (static)
-            - `*-aarch64-unknown-linux-musl` - Linux ARM64 (static)
-            - `*-armv7-unknown-linux-musleabihf` - Linux ARMv7 (static)
+            ### 🥈 Tier 2 with Host Tools (Can cross-compile and run tests)
+            Tier 2 platforms with host tools have official builds and can run automated tests.
             
-            ### Installation
-            1. Download the appropriate binary for your platform
-            2. Make it executable (Unix systems): `chmod +x binary-name`
-            3. Run the binary
+            #### Windows (Tier 2 with Host Tools)
+            - `*-aarch64-pc-windows-msvc.exe` - Windows ARM64 (Surface, etc.)
             
-            ### Verification
-            You can verify the integrity of downloaded files using the provided `SHA256SUMS` file.
+            #### Linux (Tier 2 with Host Tools)
+            - `*-aarch64-unknown-linux-gnu` - Linux ARM64 (Raspberry Pi 3+, servers)
+            - `*-x86_64-unknown-linux-musl` - Linux x64 (static linking, Alpine, containers)
             
-            **Built with:** Rust stable
-            **Automated build:** GitHub Actions
+            ### 🥉 Tier 2 without Host Tools (Cross-compile only)
+            Tier 2 platforms without host tools are cross-compiled and may require additional testing.
+            
+            #### Linux (Tier 2 without Host Tools)
+            - `*-armv7-unknown-linux-gnueabihf` - Linux ARMv7 hard-float (Raspberry Pi 2)
+            - `*-arm-unknown-linux-gnueabihf` - Linux ARM hard-float (older devices)
+            - `*-aarch64-unknown-linux-musl` - Linux ARM64 (static, Alpine on ARM)
+            - `*-armv7-unknown-linux-musleabihf` - Linux ARMv7 (static, containers)
+            - `*-i686-unknown-linux-musl` - Linux x86 32-bit (static)
+            
+            ### 📦 Installation
+            1. Download the appropriate binary for your platform and architecture
+            2. Extract if compressed
+            3. Make it executable (Unix/Linux/macOS): `chmod +x binary-name`
+            4. Run the binary: `./binary-name` or `binary-name.exe` (Windows)
+            
+            ### ✅ Verification
+            Verify file integrity using the provided `SHA256SUMS` file:
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+            
+            ### 📋 Platform Support Information
+            - **Tier 1**: Guaranteed to build and work. Highest priority for bug fixes.
+            - **Tier 2 with Host Tools**: Official builds with automated testing support.
+            - **Tier 2 without Host Tools**: Cross-compiled builds, community tested.
+            
+            **Built with:** Rust stable toolchain  
+            **Automated build:** GitHub Actions cross-platform CI/CD
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           files: |
