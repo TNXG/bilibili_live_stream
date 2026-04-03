@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use crate::error::{BiliLiveError, Result};
 use crate::{user_info, user_success, user_warning, user_input_prompt};
-use copypasta::{ClipboardContext, ClipboardProvider};
+use arboard::Clipboard;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Cookies {
@@ -70,9 +70,9 @@ pub const QR_STATUS: QRStatus = QRStatus {
 
 /// 复制文本到剪贴板
 fn copy_to_clipboard(text: &str) -> Result<()> {
-    match ClipboardContext::new() {
+    match Clipboard::new() {
         Ok(mut ctx) => {
-            ctx.set_contents(text.to_owned())
+            ctx.set_text(text.to_owned())
                 .map_err(|e| BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, format!("复制到剪贴板失败: {}", e))))?;
             Ok(())
         }
