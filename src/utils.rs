@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use crate::error::{BiliLiveError, Result};
 use crate::{user_info, user_success, user_warning, user_input_prompt};
-use copypasta::{ClipboardContext, ClipboardProvider};
+use arboard::Clipboard;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Cookies {
@@ -68,18 +68,29 @@ pub const QR_STATUS: QRStatus = QRStatus {
     success: 0,     // 登录成功
 };
 
+use std::cell::RefCell;
+
+thread_local! {
+    static CLIPBOARD: RefCell<Option<Clipboard>> = RefCell::new(None);
+}
+
 /// 复制文本到剪贴板
 fn copy_to_clipboard(text: &str) -> Result<()> {
-    match ClipboardContext::new() {
-        Ok(mut ctx) => {
-            ctx.set_contents(text.to_owned())
-                .map_err(|e| BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, format!("复制到剪贴板失败: {}", e))))?;
-            Ok(())
+    CLIPBOARD.with(|cell| {
+        let mut clipboard_opt = cell.borrow_mut();
+        if clipboard_opt.is_none() {
+            if let Ok(ctx) = Clipboard::new() {
+                *clipboard_opt = Some(ctx);
+            }
         }
-        Err(e) => {
-            Err(BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, format!("无法访问剪贴板: {}", e))))
+        
+        if let Some(ctx) = clipboard_opt.as_mut() {
+            ctx.set_text(text.to_owned())
+                .map_err(|e| BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, format!("复制到剪贴板失败: {}", e))))
+        } else {
+            Err(BiliLiveError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "无法初始化剪贴板".to_string())))
         }
-    }
+    })
 }
 
 /// 打码显示推流码（只显示前6位和后4位）
