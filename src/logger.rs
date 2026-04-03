@@ -4,7 +4,7 @@ use std::io::Write;
 
 pub fn init_logger() {
     let mut builder = Builder::new();
-    
+
     // 设置日志格式
     builder.format(|buf, record| {
         let level_emoji = match record.level() {
@@ -14,7 +14,7 @@ pub fn init_logger() {
             log::Level::Debug => "🔍",
             log::Level::Trace => "🔬",
         };
-        
+
         writeln!(
             buf,
             "{} {} [{}] {}",
@@ -24,13 +24,13 @@ pub fn init_logger() {
             record.args()
         )
     });
-    
+
     // 设置默认日志级别
     builder.filter(None, LevelFilter::Info);
-    
+
     // 设置目标为stdout
     builder.target(Target::Stdout);
-    
+
     // 初始化日志系统
     builder.init();
 }
@@ -84,4 +84,4 @@ macro_rules! user_input_prompt {
             std::io::stdout().flush().unwrap();
         }
     };
-} 
+}

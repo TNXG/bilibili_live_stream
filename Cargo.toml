@@ -11,21 +11,21 @@ panic = "abort"
 strip = "symbols"
 
 [dependencies]
-ctrlc = "3.4.7"
-image = { version = "0.25.6", default-features = false, features = ["png"] }
+ctrlc = "3.5.2"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 qrcode = "0.14.1"
 # reqwest = { version = "0.12.15", features = [
 #     "blocking",
 #     "json",
 # ] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.142", default-features = false, features = [
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", default-features = false, features = [
     "alloc",
 ] }
-minreq = { version = "2.14.0", default-features = false, features = ["https-rustls"] }
-thiserror = { version = "2.0.12", default-features = false }
-log = { version = "0.4.27", default-features = false }
-env_logger = { version = "0.11.8", default-features = false }
-chrono = { version = "0.4.41", features = ["serde"] }
-arboard = "3.4.1"
-clap = { version = "4.5.45", features = ["derive"] }
+minreq = { version = "2.14.1", default-features = false, features = ["https-rustls"] }
+thiserror = { version = "2.0.18", default-features = false }
+log = { version = "0.4.29", default-features = false }
+env_logger = { version = "0.11.10", default-features = false }
+chrono = { version = "0.4.44", features = ["serde"] }
+arboard = "3.6.1"
+clap = { version = "4.6.0", features = ["derive"] }

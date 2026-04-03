@@ -1,10 +1,10 @@
-mod utils;
 mod error;
 mod logger;
+mod utils;
 
-use error::{BiliLiveError, Result};
 use crate::logger::init_logger;
 use clap::Parser;
+use error::{BiliLiveError, Result};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -16,10 +16,10 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    
+
     // 初始化日志系统
     init_logger();
-    
+
     if let Err(e) = run(args) {
         user_error!("程序执行失败: {}", e);
         std::process::exit(1);
@@ -41,12 +41,13 @@ fn run(args: Args) -> Result<()> {
     let mut input = String::new();
     std::io::stdin()
         .read_line(&mut input)
-        .map_err(|e| BiliLiveError::InputError(format!("读取用户输入失败: {}", e)))?;
+        .map_err(|e| BiliLiveError::Input(format!("读取用户输入失败: {}", e)))?;
 
     let area_id = if input.trim().is_empty() || input.trim().to_lowercase() == "y" {
         let (id, name) = utils::get_recent_live()?;
         user_success!("使用上次的分区: {} - {}", name, id);
-        id.parse().map_err(|e| BiliLiveError::ParseError(format!("分区ID转换失败: {}", e)))?
+        id.parse()
+            .map_err(|e| BiliLiveError::Parse(format!("分区ID转换失败: {}", e)))?
     } else {
         user_info!("选择合适的直播分区！");
         utils::get_area_choice()?
