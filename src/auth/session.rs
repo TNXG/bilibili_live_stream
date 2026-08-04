@@ -17,20 +17,23 @@ pub fn check_status() -> Result<bool> {
         return Ok(false);
     }
     let sessdata = read_cookies()?.sessdata;
-    let response = minreq::get("https://api.bilibili.com/x/web-interface/nav")
-        .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .with_header("Cookie", format!("SESSDATA={}", sessdata))
-        .send()?;
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get("https://api.bilibili.com/x/web-interface/nav")
+        .header("User-Agent", DEFAULT_USER_AGENT)
+        .header("Cookie", format!("SESSDATA={}", sessdata))
+        .header("Referer", "https://www.bilibili.com/")
+        .send()
+        .map_err(|e| BiliLiveError::Network(e.to_string()))?;
 
-    let response_text = response.as_str()?;
-    let response_json: serde_json::Value = serde_json::from_str(response_text)?;
-    let code = response_json["code"]
-        .as_i64()
-        .ok_or_else(|| BiliLiveError::Parse("无法解析响应码".to_string()))?;
-    if code == 0 {
+    let response_json: serde_json::Value =
+        serde_json::from_str(&resp.text().map_err(|e| BiliLiveError::Network(e.to_string()))?)?;
+
+    let is_login = response_json["data"]["isLogin"].as_bool().unwrap_or(false);
+    if is_login {
         Ok(true)
     } else {
-        user_warning!("登录状态异常");
+        user_warning!("当前登录状态已失效，请重新登录");
         Ok(false)
     }
 }

@@ -14,16 +14,14 @@ strip = "symbols"
 ctrlc = "3.5.2"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 qrcode = "0.14.1"
-# reqwest = { version = "0.12.15", features = [
-#     "blocking",
-#     "json",
-# ] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.149", default-features = false, features = [
-    "alloc",
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "cookies",
+    "rustls-tls",
 ] }
-minreq = { version = "2.14.1", default-features = false, features = ["https-rustls"] }
-thiserror = { version = "2.0.18", default-features = false }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", default-features = false, features = ["alloc"] }
+thiserror = { version = "2.0", default-features = false }
 log = { version = "0.4.29", default-features = false }
 env_logger = { version = "0.11.10", default-features = false }
 chrono = { version = "0.4.44", features = ["serde"] }

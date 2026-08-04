@@ -14,16 +14,19 @@ pub fn start_live(area_id: &str, show_full_code: bool) -> Result<u64> {
         cookies.room_id, area_id, cookies.csrf_token
     );
 
-    let response = minreq::post("https://api.live.bilibili.com/room/v1/Room/startLive")
-        .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .with_header("Content-Type", "application/x-www-form-urlencoded")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
-        .with_header("platform", "web_electron_link")
-        .with_body(form_data)
-        .send()?;
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post("https://api.live.bilibili.com/room/v1/Room/startLive")
+        .header("User-Agent", DEFAULT_USER_AGENT)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .header("platform", "web_electron_link")
+        .body(form_data)
+        .send()
+        .map_err(|e| BiliLiveError::Network(e.to_string()))?;
 
-    let response_text = response.as_str()?;
-    let res: serde_json::Value = serde_json::from_str(response_text)?;
+    let res: serde_json::Value =
+        serde_json::from_str(&resp.text().map_err(|e| BiliLiveError::Network(e.to_string()))?)?;
 
     if res["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(
@@ -66,15 +69,18 @@ pub fn stop_live(live_id: u64) -> Result<()> {
         cookies.room_id, cookies.csrf_token
     );
 
-    let response = minreq::post("https://api.live.bilibili.com/room/v1/Room/stopLive")
-        .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .with_header("Content-Type", "application/x-www-form-urlencoded")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
-        .with_body(form_data)
-        .send()?;
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post("https://api.live.bilibili.com/room/v1/Room/stopLive")
+        .header("User-Agent", DEFAULT_USER_AGENT)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .body(form_data)
+        .send()
+        .map_err(|e| BiliLiveError::Network(e.to_string()))?;
 
-    let response_text = response.as_str()?;
-    let res: serde_json::Value = serde_json::from_str(response_text)?;
+    let res: serde_json::Value =
+        serde_json::from_str(&resp.text().map_err(|e| BiliLiveError::Network(e.to_string()))?)?;
 
     if res["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(

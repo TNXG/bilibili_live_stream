@@ -10,14 +10,17 @@ pub fn get_live_info(live_id: u64) -> Result<()> {
         live_id
     );
 
-    let response = minreq::get(&url)
-        .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .with_header("Content-Type", "application/json, text/plain, */*")
-        .with_header("Cookie", format!("SESSDATA={}", cookies.sessdata))
-        .send()?;
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get(&url)
+        .header("User-Agent", DEFAULT_USER_AGENT)
+        .header("Content-Type", "application/json, text/plain, */*")
+        .header("Cookie", format!("SESSDATA={}", cookies.sessdata))
+        .send()
+        .map_err(|e| BiliLiveError::Network(e.to_string()))?;
 
-    let response_text = response.as_str()?;
-    let res: serde_json::Value = serde_json::from_str(response_text)?;
+    let res: serde_json::Value =
+        serde_json::from_str(&resp.text().map_err(|e| BiliLiveError::Network(e.to_string()))?)?;
 
     if res["code"].as_i64() != Some(0) {
         return Err(BiliLiveError::Api(format!(

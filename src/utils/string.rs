@@ -1,16 +1,3 @@
-pub fn get_query_string(name: &str, url: &str) -> String {
-    let pairs: Vec<&str> = url.split('?').nth(1).unwrap_or("").split('&').collect();
-
-    for pair in pairs {
-        let mut parts = pair.split('=');
-        if let Some(key) = parts.next()
-            && key == name
-        {
-            return parts.next().unwrap_or("").to_string();
-        }
-    }
-    String::new()
-}
 
 pub fn mask_rtmp_code(code: &str) -> String {
     if code.len() <= 10 {

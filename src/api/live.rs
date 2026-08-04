@@ -8,12 +8,16 @@ pub fn get_recent_live() -> Result<(String, String)> {
         "https://api.live.bilibili.com/room/v1/Area/getMyChooseArea?roomid={}",
         room_id
     );
-    let response = minreq::get(&url)
-        .with_header("User-Agent", DEFAULT_USER_AGENT)
-        .send()?;
 
-    let response_text = response.as_str()?;
-    let json: serde_json::Value = serde_json::from_str(response_text)?;
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get(&url)
+        .header("User-Agent", DEFAULT_USER_AGENT)
+        .send()
+        .map_err(|e| BiliLiveError::Network(e.to_string()))?;
+
+    let json: serde_json::Value =
+        serde_json::from_str(&resp.text().map_err(|e| BiliLiveError::Network(e.to_string()))?)?;
     let data = &json["data"][0];
     let id = data["id"]
         .as_str()

@@ -1,7 +1,6 @@
 use crate::api::passport::get_roomid;
 use crate::error::{BiliLiveError, Result};
 use crate::user_success;
-use crate::utils::string::get_query_string;
 use serde::{Deserialize, Serialize};
 use std::fs;
 
@@ -12,13 +11,12 @@ pub struct Cookies {
     pub csrf_token: String,
 }
 
-pub fn save_cookies(set_cookies_url: &str) -> Result<()> {
-    let bili_sessdata = get_query_string("SESSDATA", set_cookies_url);
-    let csrf = get_query_string("bili_jct", set_cookies_url);
+/// 保存登录凭证（SESSDATA 和 csrf 已由 LoginClient 从 cookie jar 提取）
+pub fn save_cookies(sessdata: &str, csrf_token: &str) -> Result<()> {
     let cookies = Cookies {
-        room_id: get_roomid(&bili_sessdata)?,
-        sessdata: bili_sessdata,
-        csrf_token: csrf,
+        room_id: get_roomid(sessdata)?,
+        sessdata: sessdata.to_string(),
+        csrf_token: csrf_token.to_string(),
     };
 
     let cookies_json = serde_json::to_string_pretty(&cookies)?;
