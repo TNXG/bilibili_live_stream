@@ -3,7 +3,7 @@ use crate::model::Credentials;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub(super) fn cookie_value(raw: &str, name: &str) -> Option<String> {
     raw.split(';')
@@ -31,7 +31,7 @@ pub(super) fn persist_credentials(c: &Credentials, path: &Path) -> Result<()> {
     validate_credentials(c)?;
     let bytes = serde_json::to_vec_pretty(c)
         .map_err(|_| BiliLiveError::Parse("无法编码登录凭据".into()))?;
-    static SERIAL: AtomicU64 = AtomicU64::new(0);
+    static SERIAL: AtomicUsize = AtomicUsize::new(0);
     let temp = path.with_file_name(format!(
         ".cookies.json.{}.{}.tmp",
         std::process::id(),

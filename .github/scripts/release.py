@@ -61,9 +61,12 @@ def changes(root, tag, repository):
     def git(*args):
         return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
 
-    # Exclude the current tag, including the first-tag-on-the-root-commit case.
+    # Stable release notes compare against a stable tag, not their own RC.
+    describe = ["git", "-C", str(root), "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", "--exclude", tag]
+    if "-" not in tag.split("+", 1)[0]:
+        describe += ["--exclude", "v*-*"]
     previous_result = subprocess.run(
-        ["git", "-C", str(root), "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", "--exclude", tag, tag],
+        [*describe, tag],
         capture_output=True, text=True, encoding="utf-8",
     )
     if previous_result.returncode not in (0, 128):

@@ -54,7 +54,7 @@ class ReleaseTests(unittest.TestCase):
             release.checksums(root, [root / "binary.zip"])
             self.assertEqual((root / "SHA256SUMS").read_text(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  binary.zip\n")
 
-    def test_changelog_uses_previous_reachable_tag_and_records_breaking_changes(self):
+    def test_changelog_uses_applicable_previous_tag_and_records_breaking_changes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             def git(*args):
@@ -80,6 +80,11 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("旧配置需要迁移", text)
             self.assertNotIn("old feature", text)
             self.assertIn("https://github.com/owner/repo/commit/", text)
+            git("tag", "v1.1.0")
+            previous_stable, stable_sections = release.changes(root, "v1.1.0", "owner/repo")
+            self.assertEqual(previous_stable, "v1.0.0")
+            self.assertIn("新增选择界面", "\n".join(stable_sections))
+            self.assertIn("旧配置需要迁移", "\n".join(stable_sections))
 
     def test_first_release_includes_history_and_no_compare_link(self):
         with tempfile.TemporaryDirectory() as directory:

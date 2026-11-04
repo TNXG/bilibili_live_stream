@@ -29,8 +29,8 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@stable
@@ -78,13 +78,19 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Install Windows x86 assembler
+        if: matrix.target == 'i686-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress --yes
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\NASM'
       - name: Install cross
         if: matrix.cross
         # Pin the CLI; current images supply modern GCC, CMake and QEMU.
@@ -143,10 +149,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Download verified packages
