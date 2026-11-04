@@ -2,6 +2,7 @@
 name = "bili_live"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 
 [profile.release]
 codegen-units = 1
@@ -11,19 +12,22 @@ panic = "abort"
 strip = "symbols"
 
 [dependencies]
-ctrlc = "3.5.2"
+arboard = { version = "3.7.0", default-features = false }
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+clap = { version = "4.6.7", features = ["derive"] }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-qrcode = "0.14.1"
-reqwest = { version = "0.12", default-features = false, features = [
+log = { version = "0.4.35", features = ["std"] }
+qrcode = { version = "0.14.1", default-features = false }
+ratatui = "0.30.2"
+ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
+reqwest = { version = "0.13.5", default-features = false, features = [
     "blocking",
     "cookies",
-    "rustls-tls",
+    "rustls",
+    "form",
+    "query",
 ] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.149", default-features = false, features = ["alloc"] }
-thiserror = { version = "2.0", default-features = false }
-log = { version = "0.4.29", default-features = false }
-env_logger = { version = "0.11.10", default-features = false }
-chrono = { version = "0.4.44", features = ["serde"] }
-arboard = "3.6.1"
-clap = { version = "4.6.0", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["alloc"] }
+thiserror = { version = "2.0.21", default-features = false }
+unicode-width = "0.2"
