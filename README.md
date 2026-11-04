@@ -41,27 +41,20 @@
 
 ### 预编译版本
 
-本项目支持多个平台和架构，提供预编译二进制文件降低客户端构建的碳排放。可前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载最新版本：
+前往 [Release 页面](https://github.com/TNXG/bilibili_live_stream/releases) 下载适合自己系统和架构的安装包：
 
-- **Windows**
-  - x86_64 (64位 Intel/AMD)
-  - i686 (32位 Intel/AMD)
-  - aarch64 (ARM64 架构，如 Surface Pro X)
+| 平台 | 架构 / ABI |
+|---|---|
+| Windows | x86_64、i686、ARM64（MSVC） |
+| macOS | Intel x86_64、Apple Silicon ARM64 |
+| Linux GNU / musl | x86_64、i686、ARM64、ARM / ARMv7（软浮点及硬浮点）、ARMv5TE（软浮点）、RISC-V 64、LoongArch64 |
+| Linux GNU | PowerPC、PowerPC64、PowerPC64LE、s390x、SPARC64 |
+| FreeBSD | x86_64、i686 |
 
-- **macOS**
-  - x86_64 (Intel 处理器)
-  - aarch64 (Apple Silicon M1/M2/M3/M4/M5)
-
-- **Linux**
-  - x86_64 (64位)
-  - i686 (32位)
-  - aarch64-gnu (ARM64 架构，如树莓派 3+、服务器)
-  - x86_64-musl (x64 静态链接版本，适用于 Alpine、容器)
-  - armv7-gnueabihf (ARMv7 硬浮点，如树莓派 2)
-  - arm-gnueabihf (ARM 硬浮点，旧设备)
-  - aarch64-musl (ARM64 静态链接，Alpine on ARM)
-  - armv7-musleabihf (ARMv7 静态链接，容器)
-  - i686-musl (32位 x86 静态链接)  
+- **选择安装包**：Windows 使用 `.zip`，其他平台使用 `.tar.gz`；文件名包含版本和完整 Rust 目标三元组，压缩包包含程序、README 和许可证，不包含 Cookie。
+- **Linux 兼容性**：GNU 包依赖构建工具链对应的 glibc，旧发行版或 Alpine 优先尝试 musl 包。musl 包静态链接 libc，但仍需系统 CA 证书；剪贴板依赖可用的桌面会话。
+- **兼容性**：FreeBSD 包需匹配系统 ABI；macOS 与 Windows 包未签名，首次运行可能出现系统安全提示。各平台的验证范围见对应 Release。
+- **完整性**：每次 Release 提供 `SHA256SUMS`。Linux 可将已下载的安装包与校验文件放在同一目录，执行 `sha256sum --ignore-missing -c SHA256SUMS`；macOS 使用 `shasum -a 256 <安装包>`，Windows 使用 `Get-FileHash <安装包> -Algorithm SHA256` 与对应行比较。
 
 ### 自行编译
 

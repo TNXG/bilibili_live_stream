@@ -1,376 +1,165 @@
-name: Cross-platform Release Build
-
-permissions:
-  contents: write
+name: Build and Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
+  BUILD_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}
 
 jobs:
-  build:
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ==========================================
-          # Tier 1 Platforms (guaranteed to work)
-          # ==========================================
-          
-          # Windows Tier 1
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            cross: false
-            tier: 1
-          - os: windows-latest
-            target: i686-pc-windows-msvc
-            cross: false
-            tier: 1
-          
-          # macOS Tier 1
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            cross: false
-            tier: 1
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            cross: false
-            tier: 1
-          
-          # Linux Tier 1
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            cross: false
-            tier: 1
-          - os: ubuntu-latest
-            target: i686-unknown-linux-gnu
-            cross: true
-            tier: 1
-          
-          # ==========================================
-          # Tier 2 with Host Tools (can cross-compile and run tests)
-          # ==========================================
-          
-          # Windows Tier 2 with Host Tools
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
-            cross: false
-            tier: 2-host
-          
-          # Linux Tier 2 with Host Tools
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            cross: true
-            tier: 2-host
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            cross: true
-            tier: 2-host
-          
-          # ==========================================
-          # Tier 2 without Host Tools (cross-compile only)
-          # ==========================================
-          
-          # Linux Tier 2 without Host Tools
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            cross: true
-            tier: 2-no-host
-          - os: ubuntu-latest
-            target: arm-unknown-linux-gnueabihf
-            cross: true
-            tier: 2-no-host
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            cross: true
-            tier: 2-no-host
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-musleabihf
-            cross: true
-            tier: 2-no-host
-          - os: ubuntu-latest
-            target: i686-unknown-linux-musl
-            cross: true
-            tier: 2-no-host
-
+  check:
+    name: Test and prepare matrix
+    # Standard hosted runners are free for public repositories only.
+    if: github.event.repository.private == false
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          targets: ${{ matrix.target }}
-          components: rust-src
-
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-          cache-on-failure: true
-
-      - name: Install cross (Linux only)
-        if: matrix.cross == true
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cross
-
-      - name: Setup Windows dependencies
-        if: runner.os == 'Windows'
-        shell: pwsh
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test application
+        run: cargo test --locked
+      - name: Test release tooling
+        run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Prepare target matrix
+        id: matrix
+        shell: python
         run: |
-          # Enable long paths for Windows
-          git config --system core.longpaths true
-
-      - name: Setup macOS dependencies
-        if: runner.os == 'macOS'
+          import json
+          import os
+          from pathlib import Path
+          targets = json.loads(Path('.github/targets.json').read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '\n')
+      - name: Prepare release draft
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Install Xcode Command Line Tools if needed
-          xcode-select --install 2>/dev/null || true
-          sudo xcodebuild -license accept 2>/dev/null || true
-
-      - name: Setup Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
-
-      - name: Build binary (with cross)
-        if: matrix.cross == true
-        run: cross build --target ${{ matrix.target }} --release --locked
-
-      - name: Build binary (native)
-        if: matrix.cross == false
-        run: cargo build --target ${{ matrix.target }} --release --locked
-
-      - name: Prepare binary (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts
-          
-          # Get binary name from Cargo.toml
-          $binaryName = (Select-String -Path "Cargo.toml" -Pattern '^name = "(.+)"').Matches[0].Groups[1].Value
-          
-          # Source and destination paths
-          $sourcePath = "target\${{ matrix.target }}\release\${binaryName}.exe"
-          $destPath = "artifacts\${binaryName}-${{ matrix.target }}.exe"
-          
-          # Copy and verify
-          if (Test-Path $sourcePath) {
-            Copy-Item $sourcePath $destPath
-            Write-Host "✅ Binary found and copied: $destPath"
-            Get-Item $destPath | Format-List
-          } else {
-            Write-Host "❌ Binary not found at: $sourcePath"
-            if (Test-Path "target\${{ matrix.target }}\release\") {
-              Write-Host "Contents of target\${{ matrix.target }}\release\:"
-              Get-ChildItem "target\${{ matrix.target }}\release\" | Format-Table
-            }
-            exit 1
-          }
-
-      - name: Prepare binary (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          mkdir -p artifacts
-          
-          # Find the binary name from Cargo.toml
-          BINARY_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
-          
-          # Source and destination paths
-          SOURCE_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}"
-          DEST_PATH="artifacts/${BINARY_NAME}-${{ matrix.target }}"
-          
-          # Copy and verify
-          if [[ -f "${SOURCE_PATH}" ]]; then
-            cp "${SOURCE_PATH}" "${DEST_PATH}"
-            echo "✅ Binary found and copied: ${DEST_PATH}"
-            
-            # Show file info
-            ls -la "${DEST_PATH}"
-            
-            # Show file type
-            if command -v file >/dev/null 2>&1; then
-              file "${DEST_PATH}"
+          if gh release view "$BUILD_VERSION" --json isDraft --jq .isDraft > is-draft.txt; then
+            if [[ "$(cat is-draft.txt)" != true ]]; then
+              echo 'Refusing to replace an already published release.' >&2
+              exit 1
             fi
           else
-            echo "❌ Binary not found at: ${SOURCE_PATH}"
-            echo "Contents of target/${{ matrix.target }}/release/:"
-            ls -la "target/${{ matrix.target }}/release/" || true
-            exit 1
+            gh release create "$BUILD_VERSION" --verify-tag --draft --title "$BUILD_VERSION" --notes 'Building and verifying distribution packages.'
           fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+  build:
+    name: Build ${{ matrix.target }}
+    needs: check
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.check.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          name: binary-${{ matrix.target }}
-          path: artifacts/*
-          if-no-files-found: error
-          retention-days: 7
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross
+        if: matrix.cross
+        # Pin the CLI; current images supply modern GCC, CMake and QEMU.
+        run: cargo install cross --git https://github.com/cross-rs/cross --rev a9301e91f72bba3850460512685f6b16062015ff --locked
+      - name: Select cross image
+        if: matrix.cross
+        run: |
+          image_key="CROSS_TARGET_${TARGET^^}_IMAGE"
+          image_key="${image_key//-/_}"
+          echo "${image_key}=ghcr.io/cross-rs/${TARGET}:main" >> "$GITHUB_ENV"
+      - name: Build with cross
+        if: matrix.cross
+        run: cross build --release --locked --target "$TARGET" --bin bili_live
+      - name: Build natively
+        if: '!matrix.cross'
+        run: cargo build --release --locked --target "$TARGET" --bin bili_live
+      - name: Verify native binary
+        if: matrix.smoke == 'native'
+        run: |
+          executable="target/$TARGET/release/bili_live"
+          if [[ "$TARGET" == *windows* ]]; then executable+=".exe"; fi
+          "$executable" --version
+          "$executable" --help
+      - name: Verify binary in cross runner
+        if: matrix.smoke == 'qemu'
+        run: |
+          cross run --release --locked --target "$TARGET" --bin bili_live -- --version
+          cross run --release --locked --target "$TARGET" --bin bili_live -- --help
+      - name: Package distribution
+        run: python .github/scripts/release.py package --target "$TARGET" --version "$BUILD_VERSION"
+      - name: Summarize target
+        env:
+          VERIFICATION: ${{ matrix.smoke }}
+        run: |
+          {
+            echo "### $TARGET"
+            echo "- Startup verification: $VERIFICATION"
+            echo "- Toolchain: $(rustc --version)"
+            echo "- Archive:"
+            printf '  - `%s`\n' artifacts/*
+          } >> "$GITHUB_STEP_SUMMARY"
+      # Release assets avoid metered Actions artifact/cache storage entirely.
+      - name: Upload verified package to draft
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$BUILD_VERSION" artifacts/* --clobber
 
   release:
-    name: Create Release
+    name: Publish release
     needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Display structure of downloaded files
-        run: |
-          echo "Downloaded artifacts:"
-          ls -la artifacts/
-
-      - name: Generate checksums
-        run: |
-          cd artifacts
-          sha256sum * > SHA256SUMS
-          echo "Generated checksums:"
-          cat SHA256SUMS
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
         with:
-          name: Release ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          body: |
-            ## Release ${{ github.ref_name }}
-            
-            This release contains pre-compiled binaries for multiple platforms and architectures, organized by Rust platform support tier.
-            
-            ### 🥇 Tier 1 Platforms (Guaranteed to work)
-            Tier 1 platforms have the highest level of support with guaranteed builds and official testing.
-            
-            #### Windows (Tier 1)
-            - `*-x86_64-pc-windows-msvc.exe` - Windows 64-bit (Intel/AMD)
-            - `*-i686-pc-windows-msvc.exe` - Windows 32-bit (Intel/AMD)
-            
-            #### macOS (Tier 1)
-            - `*-x86_64-apple-darwin` - macOS Intel (x64)
-            - `*-aarch64-apple-darwin` - macOS Apple Silicon (M1/M2/M3)
-            
-            #### Linux (Tier 1)
-            - `*-x86_64-unknown-linux-gnu` - Linux x64
-            - `*-i686-unknown-linux-gnu` - Linux x86 (32-bit)
-            
-            ### 🥈 Tier 2 with Host Tools (Can cross-compile and run tests)
-            Tier 2 platforms with host tools have official builds and can run automated tests.
-            
-            #### Windows (Tier 2 with Host Tools)
-            - `*-aarch64-pc-windows-msvc.exe` - Windows ARM64 (Surface, etc.)
-            
-            #### Linux (Tier 2 with Host Tools)
-            - `*-aarch64-unknown-linux-gnu` - Linux ARM64 (Raspberry Pi 3+, servers)
-            - `*-x86_64-unknown-linux-musl` - Linux x64 (static linking, Alpine, containers)
-            
-            ### 🥉 Tier 2 without Host Tools (Cross-compile only)
-            Tier 2 platforms without host tools are cross-compiled and may require additional testing.
-            
-            #### Linux (Tier 2 without Host Tools)
-            - `*-armv7-unknown-linux-gnueabihf` - Linux ARMv7 hard-float (Raspberry Pi 2)
-            - `*-arm-unknown-linux-gnueabihf` - Linux ARM hard-float (older devices)
-            - `*-aarch64-unknown-linux-musl` - Linux ARM64 (static, Alpine on ARM)
-            - `*-armv7-unknown-linux-musleabihf` - Linux ARMv7 (static, containers)
-            - `*-i686-unknown-linux-musl` - Linux x86 32-bit (static)
-            
-            ### 📦 Installation
-            1. Download the appropriate binary for your platform and architecture
-            2. Extract if compressed
-            3. Make it executable (Unix/Linux/macOS): `chmod +x binary-name`
-            4. Run the binary: `./binary-name` or `binary-name.exe` (Windows)
-            
-            ### ✅ Verification
-            Verify file integrity using the provided `SHA256SUMS` file:
-            ```bash
-            sha256sum -c SHA256SUMS
-            ```
-            
-            ### 📋 Platform Support Information
-            - **Tier 1**: Guaranteed to build and work. Highest priority for bug fixes.
-            - **Tier 2 with Host Tools**: Official builds with automated testing support.
-            - **Tier 2 without Host Tools**: Cross-compiled builds, community tested.
-            
-            **Built with:** Rust stable toolchain  
-            **Automated build:** GitHub Actions cross-platform CI/CD
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-          files: |
-            artifacts/*
-          generate_release_notes: true
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Optional: Test binaries after build
-  test:
-    name: Test ${{ matrix.target }}
-    needs: build
-    runs-on: ${{ matrix.os }}
-    if: github.event_name == 'workflow_dispatch'
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            target: x86_64-apple-darwin
-    
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: binary-${{ matrix.target }}
-          path: ./
-
-      - name: Test binary (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+          python-version: '3.12'
+      - name: Download verified packages
+        run: gh release download "$BUILD_VERSION" --pattern '*.zip' --pattern '*.tar.gz' --dir artifacts
+      - name: Generate checksums and release notes
         run: |
-          $binary = Get-ChildItem -File | Select-Object -First 1
-          Write-Host "Testing binary: $($binary.Name)"
-          
-          # Example: Run with --version flag
-          try {
-            & ".\$($binary.Name)" --version
-          } catch {
-            try {
-              & ".\$($binary.Name)" --help
-            } catch {
-              Write-Host "Binary executed (no flags supported)"
-            }
-          }
-
-      - name: Test binary (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
+          python .github/scripts/release.py notes --tag "$BUILD_VERSION" --repository "$GITHUB_REPOSITORY"
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish complete release
         run: |
-          # Make executable
-          chmod +x ./*
-          
-          # Run basic test
-          BINARY=$(ls ./* | head -1)
-          echo "Testing binary: $BINARY"
-          
-          # Example: Run with --version flag
-          ./$BINARY --version || ./$BINARY --help || echo "Binary executed"
+          gh release upload "$BUILD_VERSION" artifacts/SHA256SUMS --clobber
+          if [[ "${BUILD_VERSION%%+*}" == *-* ]]; then
+            gh release edit "$BUILD_VERSION" --draft=false --prerelease --latest=false --notes-file release-notes.md
+          else
+            gh release edit "$BUILD_VERSION" --draft=false --prerelease=false --latest --notes-file release-notes.md
+          fi
